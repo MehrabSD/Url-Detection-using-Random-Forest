@@ -31,11 +31,6 @@ export const fmt = {
   pctAuto: (x) => fmt.pct(x, x > 0 && x < 0.1 ? 1 : 0),
   score: (x) => x.toFixed(2),
   signed: (x, digits = 3) => `${x < 0 ? '−' : '+'}${Math.abs(x).toFixed(digits)}`,
-  date(iso) {
-    const d = new Date(String(iso).replace(' ', 'T'));
-    return Number.isNaN(d.getTime()) ? null
-      : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-  },
   time: (d = new Date()) => d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
   // A feature's value for one URL, printed according to the kind describe.py gives it.
   feature(kind, v) {

@@ -1,5 +1,8 @@
 # Malicious URL detection with a random forest
 
+**Live demo: https://malicious-url-detector-33wl.onrender.com** (free plan: the first visit after
+a quiet spell takes about a minute while it wakes up)
+
 Classifies a URL as benign or malicious from its text alone (no site visit).
 Trained on 1.65 M URLs from three public datasets; on websites never seen in training it
 reaches 88 % accuracy, F1 0.82, ROC-AUC 0.94.
@@ -77,7 +80,7 @@ predictions, 316 MB peak memory instead of ~940 MB, so it fits the free 512 MB.
 
 1. Push this repository to GitHub (the compact model is committed; the `.joblib` is not).
 2. On render.com: **New → Blueprint**, pick the repository, **Apply** (`render.yaml` sets it up).
-3. Open `https://malicious-url-detector.onrender.com`. Every `git push` redeploys.
+3. Open the address Render shows. Every `git push` redeploys.
 
 The free service sleeps after 15 idle minutes and wakes in about a minute. Hugging Face Docker
 Spaces now need PRO; `deploy/push_to_hf_space.py` still works for PRO accounts. Details:

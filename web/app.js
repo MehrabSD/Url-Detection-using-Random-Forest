@@ -455,8 +455,7 @@ function renderFeatures() {
 
 function renderFrame() {
   const { model, examples } = view.info;
-  const trained = fmt.date(model.trained_at) ?? fmt.date(model.file_modified);
-  $('facts').textContent = `${model.trees} trees, ${model.features} features${trained ? `, trained ${trained}` : ''}`;
+  $('facts').textContent = `${model.trees} trees, ${model.features} features`;
 
   fill($('examples'), 'Try one: ',
     examples.map((x) => el('button', { class: 'link', type: 'button', text: x.label, onclick: () => load(x.url) })));
