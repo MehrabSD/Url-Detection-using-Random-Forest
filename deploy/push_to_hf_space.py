@@ -33,7 +33,7 @@ KEEP_IN_SPACE = {".gitattributes"}  # created by Hugging Face; leave it alone
 FIXED_FILES = {
     "Dockerfile": "Dockerfile",
     "requirements-serve.txt": "requirements-serve.txt",
-    "models/malicious_url_rf.joblib": "models/malicious_url_rf.joblib",
+    "models/malicious_url_rf.npz": "models/malicious_url_rf.npz",
     "reports/metrics.json": "reports/metrics.json",
     "reports/external_eval.json": "reports/external_eval.json",
     "reports/red_team.json": "reports/red_team.json",
@@ -56,13 +56,19 @@ def check_model_loads(files: dict[str, Path]) -> None:
     if missing:
         sys.exit("Missing files (run the pipeline first, see README.md): " + ", ".join(missing))
     sys.path.insert(0, str(ROOT / "src"))
-    import joblib
     import sklearn
 
+    import compact_forest
+
+    full = ROOT / "models" / "malicious_url_rf.joblib"
+    meta = compact_forest.load()
+    if full.exists() and meta["source_sha256"] != compact_forest.file_sha256(full):
+        sys.exit("models/malicious_url_rf.npz is older than the trained model. "
+                 "Run `python src/compact_forest.py` first.")
     pinned = next(line.split("==")[1].strip() for line in
                   (ROOT / "requirements-serve.txt").read_text().splitlines()
                   if line.startswith("scikit-learn=="))
-    saved_with = joblib.load(ROOT / "models" / "malicious_url_rf.joblib").get("sklearn_version")
+    saved_with = meta["sklearn_version"]
     if saved_with and saved_with != pinned:
         sys.exit(f"The model was saved with scikit-learn {saved_with} but requirements-serve.txt "
                  f"pins {pinned}. Make them match, or the Space cannot load the model.")

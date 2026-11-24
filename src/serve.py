@@ -28,6 +28,8 @@ from datetime import datetime
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+import numpy as np
+
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import adversary
@@ -36,6 +38,7 @@ import explain
 import hardening
 import lookalike
 import triage
+from compact_forest import COMPACT_PATH, file_sha256
 from predict import MODEL_PATH, UrlClassifier
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -66,6 +69,22 @@ CONTENT_TYPES = {
 }
 
 
+def serving_path() -> Path:
+    """The compact export (compact_forest.py) when it matches the trained model:
+    same predictions in about a fifth of the memory, which is what lets the demo run
+    on a 512 MB free plan. Inside the container only the compact file exists."""
+    if not COMPACT_PATH.exists():
+        return MODEL_PATH
+    if MODEL_PATH.exists():
+        with np.load(COMPACT_PATH, allow_pickle=False) as z:
+            source = json.loads(str(z["meta"])).get("source_sha256")
+        if source != file_sha256(MODEL_PATH):
+            print(f"  {COMPACT_PATH.name} is older than {MODEL_PATH.name}; serving the full model. "
+                  "Run `python src/compact_forest.py` to refresh it.", flush=True)
+            return MODEL_PATH
+    return COMPACT_PATH
+
+
 def _stamp(path: Path) -> tuple[int, int] | None:
     try:
         st = path.stat()
@@ -83,15 +102,16 @@ class Model:
         self.clf = None
         self.explainer = None
         self.load_error = None
-        self._load(_stamp(MODEL_PATH))
+        self.path = serving_path()
+        self._load(_stamp(self.path))
 
     def _load(self, stamp) -> None:
-        clf = UrlClassifier()
+        clf = UrlClassifier(self.path)
         self.clf, self.explainer = clf, explain.Explainer(clf)
         self._stamp, self.load_error = stamp, None
 
     def current(self) -> tuple[UrlClassifier, explain.Explainer]:
-        stamp = _stamp(MODEL_PATH)
+        stamp = _stamp(self.path)
         if stamp is not None and stamp != self._stamp:
             with self._lock:
                 if stamp != self._stamp:
@@ -122,10 +142,10 @@ def state(model: Model) -> dict:
     return {
         "version": model.version(),
         "model": {
-            "trees": len(clf.model.estimators_),
+            "trees": clf.n_trees,
             "features": len(clf.feature_names),
-            "file": MODEL_PATH.name,
-            "file_modified": datetime.fromtimestamp(MODEL_PATH.stat().st_mtime).isoformat(timespec="seconds"),
+            "file": model.path.name,
+            "file_modified": datetime.fromtimestamp(model.path.stat().st_mtime).isoformat(timespec="seconds"),
             "trained_at": bundle_time,
         },
         "modes": modes,
@@ -292,7 +312,7 @@ def main() -> int:
     ap.add_argument("--no-open", action="store_true", help="do not open the browser")
     args = ap.parse_args()
 
-    if not MODEL_PATH.exists():
+    if not (MODEL_PATH.exists() or COMPACT_PATH.exists()):
         print("Model not found - run `python src/train.py` first.", file=sys.stderr)
         return 1
     print("Loading model ...", flush=True)

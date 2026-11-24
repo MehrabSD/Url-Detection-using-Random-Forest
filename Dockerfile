@@ -3,9 +3,11 @@
 #   docker build -t url-detector .
 #   docker run -p 7860:7860 url-detector          # then open http://localhost:7860
 #
-# Used as-is by Hugging Face Spaces (deploy/push_to_hf_space.py) and works on any
-# host that runs a Dockerfile and sets PORT (Render, Railway, Cloud Run, Fly.io).
-# The server needs about 1 GB of memory while the model loads, 600 MB after.
+# Deployed on Render's free plan (render.yaml) and usable on any host that runs a
+# Dockerfile and sets PORT (Hugging Face Spaces with PRO, Railway, Cloud Run, Fly.io).
+# It ships the compact model (src/compact_forest.py): same predictions as the
+# scikit-learn forest, and the server peaks near 320 MB instead of 940 MB, which
+# fits a 512 MB free plan.
 FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -24,7 +26,7 @@ COPY --chown=app src/ src/
 COPY --chown=app web/ web/
 COPY --chown=app reports/metrics.json reports/external_eval.json reports/red_team.json reports/
 COPY --chown=app data/processed/prepare_report.json data/processed/
-COPY --chown=app models/malicious_url_rf.joblib models/
+COPY --chown=app models/malicious_url_rf.npz models/
 
 USER app
 ENV HOST=0.0.0.0 PORT=7860

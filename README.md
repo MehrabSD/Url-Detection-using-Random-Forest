@@ -69,18 +69,19 @@ report and the model's known mistakes. Everything on the page is read from the s
 re-running `train.py` it shows the new model with no change to the page. It works offline, and
 a URL is never opened. `--port 9000` changes the port; `--no-open` skips opening the browser.
 
-## Putting the demo online
+## Putting the demo online (free)
 
-The demo runs in a container (`Dockerfile`) and can be published to a free Hugging Face Space:
+The demo runs from the `Dockerfile` on Render's free plan. The server loads a compact copy of
+the forest (`models/malicious_url_rf.npz`, made by `src/compact_forest.py`): identical
+predictions, 316 MB peak memory instead of ~940 MB, so it fits the free 512 MB.
 
-```powershell
-.\.venv\Scripts\python.exe -m pip install -r deploy\requirements-deploy.txt
-.\.venv\Scripts\hf.exe auth login                        # once; needs a "write" token
-.\.venv\Scripts\python.exe deploy\push_to_hf_space.py    # -> huggingface.co/spaces/<you>/malicious-url-detector
-```
+1. Push this repository to GitHub (the compact model is committed; the `.joblib` is not).
+2. On render.com: **New → Blueprint**, pick the repository, **Apply** (`render.yaml` sets it up).
+3. Open `https://malicious-url-detector.onrender.com`. Every `git push` redeploys.
 
-The server needs about 1 GB of memory, so 512 MB free tiers are too small. Details,
-alternatives and updating after a retrain: section 19 of the technical documentation.
+The free service sleeps after 15 idle minutes and wakes in about a minute. Hugging Face Docker
+Spaces now need PRO; `deploy/push_to_hf_space.py` still works for PRO accounts. Details:
+section 19 of the technical documentation.
 
 ## Tests
 
@@ -95,13 +96,15 @@ alternatives and updating after a retrain: section 19 of the technical documenta
 | `src/serve.py`, `web/` | demo page and its local server |
 | `src/explain.py` | per-URL explanation used by the demo page |
 | `src/describe.py` | plain-language labels for features and modes, and the example URLs |
-| `tests/` | 34 tests: explanations add up exactly to the model's score, the red team scores with the real model, lookalike rules, triage, and the server over HTTP |
+| `tests/` | 39 tests: explanations add up exactly to the model's score, the red team scores with the real model, lookalike rules, triage, the compact model equals scikit-learn, and the server over HTTP |
 | `src/adversary.py`, `src/hardening.py`, `src/red_team.py` → `reports/red_team.json` | the attacker, the multi-view defence, and the experiment measuring both |
 | `src/lookalike.py`, `src/triage.py` | brand-impersonation rules; link extraction from whole messages |
 | `Dockerfile`, `requirements-serve.txt`, `deploy/` | container for the demo and the Hugging Face upload script |
 | `src/features.py` | 53 lexical features |
 | `src/learned_features.py` | 3 features learned from training labels |
 | `src/download_data.py`, `prepare_data.py`, `train.py`, `make_figures.py`, `predict.py` | pipeline steps |
-| `models/malicious_url_rf.joblib` | trained model (88 MB) |
+| `models/malicious_url_rf.joblib` | trained model (88 MB, not in git) |
+| `models/malicious_url_rf.npz`, `src/compact_forest.py` | the same forest as flat arrays (40 MB), served by the demo |
+| `render.yaml` | free hosting on Render |
 | `reports/metrics.json`, `reports/figures/` | all results and charts |
 | `src/evaluate_external.py` → `reports/external_eval.json` | the saved model scored on a fourth dataset it was not built from (86.6 % accuracy on unseen sites) |

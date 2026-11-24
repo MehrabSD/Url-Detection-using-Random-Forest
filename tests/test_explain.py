@@ -51,7 +51,7 @@ class ExplainTest(unittest.TestCase):
 
     def test_tree_votes_average_to_the_score(self):
         result = self.explainer.explain(URLS[0])
-        self.assertEqual(len(result["tree_votes"]), len(self.clf.model.estimators_))
+        self.assertEqual(len(result["tree_votes"]), self.clf.n_trees)
         self.assertAlmostEqual(float(np.mean(result["tree_votes"])), result["score"], places=3)
 
     def test_character_heat_adds_up_to_the_pattern_score(self):

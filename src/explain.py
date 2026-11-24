@@ -26,6 +26,7 @@ import numpy as np
 from sklearn.feature_extraction.text import HashingVectorizer
 
 import describe
+from compact_forest import CompactForest
 import features as F
 
 MAX_URL_LENGTH = 2000
@@ -112,30 +113,29 @@ class Explainer:
     def __init__(self, clf):
         self.clf = clf
         self.modes = describe.modes(clf.thresholds)
-        # per tree: split feature, threshold, children, and the share of malicious
-        # training URLs in every node
-        self._trees = []
-        for est in clf.model.estimators_:
-            t = est.tree_
-            value = t.value[:, 0, :]
-            share = (value[:, 1] / value.sum(axis=1)).astype(np.float64)
-            self._trees.append((t.feature, t.threshold, t.children_left, t.children_right, share))
-        self.baseline = float(np.mean([tree[4][0] for tree in self._trees]))
+        # All trees as flat arrays: split feature, threshold, children and the share
+        # of malicious training URLs in every node (compact_forest.py). A compact
+        # model already is one; a scikit-learn forest is converted once.
+        model = clf.model
+        self._forest = model if isinstance(model, CompactForest) else CompactForest.from_sklearn(model)
+        self.baseline = float(np.mean(self._forest.share[self._forest.roots]))
         weights = getattr(clf.learned, "w_url", None)
         self._heat_scale = _HEAT_FULL_SCALE * float(np.std(weights)) if weights is not None else 0.0
 
     def _walk(self, x: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        f = self._forest
+        feature, threshold, left, right, share = f.feature, f.threshold, f.left, f.right, f.share
         moved = np.zeros(len(x))
-        votes = np.empty(len(self._trees))
-        for i, (feature, threshold, left, right, share) in enumerate(self._trees):
-            node = 0
-            while left[node] != -1:  # -1 marks a leaf
-                f = feature[node]
-                child = left[node] if x[f] <= threshold[node] else right[node]
-                moved[f] += share[child] - share[node]
+        votes = np.empty(f.n_estimators)
+        for i, root in enumerate(f.roots):
+            node = int(root)
+            while left[node] != node:  # a leaf points to itself
+                feat = feature[node]
+                child = int(left[node] if x[feat] <= threshold[node] else right[node])
+                moved[feat] += share[child] - share[node]
                 node = child
             votes[i] = share[node]
-        return moved / len(self._trees), votes
+        return moved / f.n_estimators, votes
 
     def explain(self, url: str) -> dict:
         url = str(url).strip()

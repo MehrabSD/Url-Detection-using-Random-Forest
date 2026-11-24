@@ -24,6 +24,10 @@
   `deploy/push_to_hf_space.py` uploads it to a Hugging Face Space. If `serve.py` starts
   reading a new file, add it to the Dockerfile's COPY lines and to `FIXED_FILES` in that script.
   Keep `scikit-learn` in `requirements-serve.txt` equal to the version that saved the model.
+- `src/compact_forest.py` -> `models/malicious_url_rf.npz`: the forest as flat arrays, which
+  the server and the container use (fits Render's free 512 MB; `render.yaml`). train.py writes
+  it; after replacing the .joblib any other way, run it by hand. It must stay committed to git
+  (Render builds from the repository); the .joblib stays ignored.
 
 ## Running
 Use the project venv: `.venv\Scripts\python.exe src\<script>.py`.

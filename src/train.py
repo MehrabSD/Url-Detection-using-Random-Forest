@@ -333,6 +333,9 @@ def main() -> int:
         "sklearn_version": sklearn.__version__,
     }
     joblib.dump(bundle, MODEL_PATH, compress=3)
+    # the same forest as flat arrays, for serving in little memory (compact_forest.py)
+    import compact_forest
+    compact_forest.export(MODEL_PATH)
 
     # end-to-end speed: raw URL string -> verdict
     t0 = time.time()

@@ -20,7 +20,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import numpy as np
-import pandas as pd
 from sklearn.feature_extraction.text import HashingVectorizer
 
 import features as F
@@ -69,7 +68,7 @@ class LearnedFeatures:
         m_url = HashingVectorizer(ngram_range=(3, 5), **kw).transform(urls)
         return m_host, m_url
 
-    def _tld_table(self, total: pd.DataFrame, prior: float) -> dict[str, float]:
+    def _tld_table(self, total: "pd.DataFrame", prior: float) -> dict[str, float]:
         rate = (total["s"] + prior * self.tld_smoothing) / (total["n"] + self.tld_smoothing)
         return rate.to_dict()
 
@@ -80,6 +79,8 @@ class LearnedFeatures:
         `urls` must already be normalised. `folds` must keep every domain in a
         single fold (we pass the domain-hash bucket).
         """
+        import pandas as pd  # training only: the server never needs pandas
+
         urls = list(urls)
         y = np.asarray(y).astype(np.int8)
         folds = np.asarray(folds)

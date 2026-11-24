@@ -1,0 +1,15 @@
+# Render Blueprint: the demo page as a free web service built from the Dockerfile.
+# In Render: New + -> Blueprint -> pick this repository -> Apply.
+# Free plan: 512 MB RAM (the server peaks near 320 MB), sleeps after 15 minutes
+# without visitors and wakes in about a minute on the next visit.
+services:
+  - type: web
+    name: malicious-url-detector
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/version
+    autoDeploy: true
+    envVars:
+      - key: PORT
+        value: "10000"

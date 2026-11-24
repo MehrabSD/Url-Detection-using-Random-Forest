@@ -29,14 +29,26 @@ MODES = {"balanced": "max_f1", "strict": "low_fpr", "default": "default"}
 
 
 class UrlClassifier:
+    """The saved model. `path` is the bundle train.py wrote (.joblib, a scikit-learn
+    forest) or its compact export (.npz, see compact_forest.py); both predict alike."""
+
     def __init__(self, path: Path = MODEL_PATH):
-        bundle = joblib.load(path)
+        self.path = Path(path)
+        if self.path.suffix == ".npz":
+            from compact_forest import load
+            bundle = load(self.path)
+        else:
+            bundle = joblib.load(self.path)
+            bundle["model"].set_params(n_jobs=1, verbose=0)
         self.model = bundle["model"]
         self.learned = bundle["learned"]
         self.feature_names = bundle["feature_names"]
         self.thresholds = bundle["thresholds"]
         self.trained_at = bundle.get("trained_at")
-        self.model.set_params(n_jobs=1, verbose=0)
+
+    @property
+    def n_trees(self) -> int:
+        return int(self.model.n_estimators)
 
     def featurise(self, urls: list[str]) -> np.ndarray:
         norm = [F.normalize_url(u) for u in urls]

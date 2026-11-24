@@ -74,7 +74,7 @@ benign or malicious (phishing, malware delivery or a defaced page). It never vis
 | **Red team (section 9.5)** | an automated attacker slipped **82.1 %** of the caught phishing URLs past the model with **one free edit** (400 URLs from unseen sites, external dataset) |
 | **Defence (section 9.6)** | multi-view scoring cuts that to **11.1 %** with no retraining; on the external dataset F1 0.820 → 0.824 and false alarms 14.5 % → 12.1 %; on validation F1 0.861 → 0.840 |
 | Extra layers | a rule-based lookalike-domain check (typosquats, homoglyphs, punycode; section 9.7), inbox triage of whole messages, and QR-code reading (section 17) |
-| Demo | a web page that scores a URL as it is typed, explains the verdict, attacks it live and checks whole messages (section 17), packaged to run online (section 19) |
+| Demo | a web page that scores a URL as it is typed, explains the verdict, attacks it live and checks whole messages (section 17), hosted free on Render from a compact copy of the forest (316 MB peak memory, identical predictions; section 19) |
 
 These figures are lower than the 97–99 % often quoted for this task. Section 5 shows why: the
 usual evaluation lets the same websites appear in both training and test data, and the most
@@ -682,7 +682,7 @@ choice was made.
 | OS | Windows 11 (commands below are PowerShell) | any; on Linux/macOS use `.venv/bin/python` |
 | Python | 3.12.10 | 3.12 (numpy 2.5 needs ≥ 3.12) |
 | CPU | 16 logical cores | any; training is slower with fewer cores |
-| RAM | 16 GB | 16 GB recommended for `train.py` (not tested on less); ~1 GB for the demo server |
+| RAM | 16 GB | 16 GB recommended for `train.py` (not tested on less); about 320 MB for the demo server |
 | Disk | — | `data/` 358 MB (185 MB download + 131 MB processed table) and the 88 MB model, plus the Python packages |
 | GPU | not used | — scikit-learn's random forest runs on the CPU only |
 | Network | for `download_data.py` only | nothing else ever goes online |
@@ -739,6 +739,7 @@ Mini project/
 │   ├── hardening.py            multi-view scorer (the defence)
 │   ├── lookalike.py            brand-impersonation rules
 │   ├── triage.py               finds and ranks every link in a message
+│   ├── compact_forest.py     the forest as flat arrays, for serving -> models/*.npz
 │   ├── predict.py            score URLs (CLI + UrlClassifier class)
 │   ├── serve.py              demo web server
 │   ├── explain.py              explains one prediction for the page
@@ -748,8 +749,9 @@ Mini project/
 ├── tests/                    test_explain.py, test_red_team.py: unit + HTTP tests
 ├── deploy/                   Hugging Face upload script and Space description
 ├── Dockerfile, .dockerignore, requirements-serve.txt   container for the demo
+├── render.yaml               Render Blueprint (free hosting)
 ├── data/                     raw + processed data (git-ignored; re-creatable)
-├── models/                   the trained model (git-ignored; re-creatable)
+├── models/                   the trained model (.joblib, git-ignored) and its compact copy (.npz)
 └── reports/                  metrics.json, external_eval.json, red_team.json, figures/
 ```
 
@@ -919,7 +921,7 @@ Or double-click `Start demo.bat`. Section 17 explains how it works.
 .\.venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
 
-34 tests, about 30 s (section 18).
+39 tests, about 10 s (section 18).
 
 ### Order of re-runs after a change
 
@@ -931,6 +933,7 @@ Or double-click `Start demo.bat`. Section 17 explains how it works.
 | `adversary.py`, `hardening.py`, `lookalike.py` | red_team → make_figures |
 | chart styling | make_figures |
 | the page (`web/`), `describe.py`, `explain.py`, `triage.py`, `serve.py` | nothing; restart `serve.py` after a `src/` edit |
+| a model file copied in by hand | `compact_forest.py` (train.py runs it itself) |
 
 After any re-run that changes results, update this document with numbers copied from the
 reports, add a change-log line, and re-deploy (section 19.4).
@@ -1167,6 +1170,32 @@ sets) run first, so the dynamic programme runs only for close candidates: about 
 6. Deduplicate on the normalised form, score everything in one batch, attach lookalike
    findings, and sort: links with a hidden target or high-severity lookalike first, then by score.
 
+### 15.15 The compact forest (`compact_forest.py`)
+
+All 200 trees are concatenated into five flat arrays — `feature` (int16), `threshold`
+(float64), `left` and `right` (int32, global indices) and `share` (float64, malicious share of
+the node) — plus each tree's root. A leaf's children point back to the leaf itself, so a batch
+can be pushed down every tree at once for a fixed number of steps without checking for leaves:
+
+```python
+node = np.broadcast_to(roots, (n_urls, n_trees)).copy()
+for _ in range(max_depth):                                   # 25
+    go_left = X[rows, feature[node]] <= threshold[node]      # float32 vs float64, as sklearn
+    node = np.where(go_left, left[node], right[node])        # leaves stay put
+proba = share[node].mean(axis=1)
+```
+
+Thresholds stay float64 on purpose: scikit-learn compares the float32 feature value with a
+float64 threshold, and rounding the threshold to float32 could send a value lying between the
+two roundings down the other branch. Measured on 20,000 validation URLs, the largest difference
+from `predict_proba` was 7.8 × 10⁻¹⁶ (summation order); the tests require ≤ 10⁻¹² on 725 URLs
+and identical explanations. Batch scoring is about 4× slower than scikit-learn's compiled code
+(2.6 s against 0.6 s for 20,000 URLs) but one URL still takes 0.16 ms, and the server never
+scores more than a few hundred at once; the pipeline scripts keep using the `.joblib`. The file
+is `np.savez_compressed` plus a JSON string (feature names, thresholds, learned-feature
+parameters, and the SHA-256 of the `.joblib` it came from): 40 MB instead of 88 MB, loaded with
+`allow_pickle=False`.
+
 ## 16. Design decisions and the alternatives rejected
 
 | Decision | Alternative | Why |
@@ -1188,6 +1217,8 @@ sets) run first, so the dynamic programme runs only for close candidates: about 
 | Attack the external dataset | attack the test buckets | the test buckets are used once, by train.py |
 | Lookalike as a separate layer | add it as a model feature | precise rules for a rare pattern; kept out of the score so the model's results stay exactly as measured |
 | QR decoded in the browser | upload the image | the image never leaves the visitor's machine; only the decoded text is scored |
+| Serve a compact copy of the forest | a smaller model (100 trees), a paid host | identical predictions and every reported number stays valid; fits a free 512 MB plan |
+| Render free plan | Hugging Face Spaces | Docker Spaces need PRO since 2026; Render's free plan runs a Dockerfile from GitHub |
 
 ---
 
@@ -1381,8 +1412,14 @@ needs the trained model and checks:
 | file names skipped; brackets and trailing punctuation handled | junk links such as `report.pdf` |
 | **HTTP**: `/api/score` carries the lookalike check; `/api/attack` and `/api/triage` answer and reject bad input | a broken endpoint |
 
-The HTTP tests start the real server on a free port in a background thread. 34 tests in all,
-about 30 seconds.
+`tests/test_compact.py` adds 5 tests: the compact model's probabilities equal
+`predict_proba` within 10⁻¹² on 725 URLs (the seeds plus two levels of red-team edits), the
+whole classifier, thresholds and feature names match, explanations are identical, the `.npz`
+was made from the current `.joblib`, and the server falls back to the full model when the
+fingerprints differ.
+
+The HTTP tests start the real server on a free port in a background thread. 39 tests in all,
+about 10 seconds.
 
 Manual checks done on 2026-11-24 in a browser (Chrome via agent-browser): every example
 button, typing, Enter, clearing the box, both mode switches, the measure selector, all "show
@@ -1403,16 +1440,19 @@ a photo*, decoded, filled in and scored malicious; the lookalike alignment for
 
 ### 19.1 Where it can run
 
-The server needs Python and about **1 GB of memory**: measured on this laptop, it holds about
-600 MB once running and peaks near 940 MB while the model loads (200 trees × ~24,900 nodes,
-decompressed). That rules out free tiers capped at 512 MB (Render, Koyeb) unless the forest is
-shrunk.
+**Memory decides.** Loaded as scikit-learn objects, the forest's 4,980,076 nodes made the server
+hold about 600 MB and peak near 940 MB while loading (measured on this laptop). The server now
+loads the **compact model** instead (`models/malicious_url_rf.npz`, section 15.15): the same
+200 trees as flat arrays, identical predictions. Measured the same way with every endpoint
+exercised (score, a hardened attack, a 120-link message), the server process peaked at
+**316 MB**. pandas is also no longer installed in the container (scikit-learn runs without it).
+That brings the demo inside 512 MB free plans.
 
-| Option | Cost | Fits? | Notes |
+| Option | Cost (November 2026) | Fits? | Notes |
 |---|---|---|---|
-| **Hugging Face Spaces** (Docker) | free CPU tier (2 vCPU, 16 GB at the time of writing) | yes | **recommended**; built for ML demos; a profile link is good for a resume |
-| Google Cloud Run, Railway, Fly.io | pay-as-you-go / trial credit | yes with ≥ 1 GB | use the same `Dockerfile` |
-| Render / Koyeb free | free | no (512 MB) | would need a smaller model |
+| **Render** web service (Docker) | free plan: 512 MB, 0.1 CPU | yes (peak 316 MB) | **used**; deploys from the GitHub repository with `render.yaml`; sleeps after 15 minutes idle, wakes in about a minute |
+| Hugging Face Spaces (Docker) | needs PRO ($9/month) since 2026 | yes | `deploy/push_to_hf_space.py` still works for a PRO account; free accounts get `402 Payment Required` — only *static* Spaces stay free |
+| Google Cloud Run, Railway, Fly.io | free credit / pay-as-you-go, card required | yes | same `Dockerfile` |
 | GitHub Pages, Netlify (static) | free | no | cannot run Python; the model would have to be rewritten for the browser |
 
 ### 19.2 The container (`Dockerfile`)
@@ -1422,12 +1462,12 @@ FROM python:3.12-slim
 RUN useradd --create-home --uid 1000 app        # Spaces run containers as user 1000
 WORKDIR /app
 COPY requirements-serve.txt .
-RUN pip install -r requirements-serve.txt       # runtime packages only, same versions
+RUN pip install -r requirements-serve.txt       # runtime packages only, same versions, no pandas
 COPY --chown=app src/ src/
 COPY --chown=app web/ web/
 COPY --chown=app reports/metrics.json reports/external_eval.json reports/red_team.json reports/
 COPY --chown=app data/processed/prepare_report.json data/processed/
-COPY --chown=app models/malicious_url_rf.joblib models/
+COPY --chown=app models/malicious_url_rf.npz models/     # the compact model, 40 MB
 USER app
 ENV HOST=0.0.0.0 PORT=7860
 CMD ["python", "src/serve.py", "--no-open"]
@@ -1435,54 +1475,68 @@ CMD ["python", "src/serve.py", "--no-open"]
 
 The requirements file is copied and installed *before* the code, so Docker can reuse the
 cached package layer when only code changes. `.dockerignore` keeps the 358 MB `data/` folder
-and the venv out of the build. With Docker installed: `docker build -t url-detector .` then
-`docker run -p 7860:7860 url-detector` and open http://localhost:7860.
+and the venv out of the build. The 88 MB `.joblib` pickle is not shipped: the container serves
+the `.npz`, which loads without pickle and so cannot run code. With Docker installed:
+`docker build -t url-detector .` then `docker run -p 7860:7860 url-detector` and open
+http://localhost:7860. The platform's `PORT` variable overrides the 7860 default.
 
-### 19.3 Publishing to Hugging Face Spaces
+### 19.3 Publishing on Render (free)
 
-One-time setup:
+`render.yaml` in the repository describes the service (a *Blueprint*):
 
-1. Create a free account at huggingface.co.
-2. Settings → **Access Tokens** → *Create new token* → type **Write**. Treat it like a
-   password.
-3. Install the uploader and log in (opens the browser or asks for the token):
-
-   ```powershell
-   .\.venv\Scripts\python.exe -m pip install -r deploy\requirements-deploy.txt
-   .\.venv\Scripts\hf.exe auth login
-   ```
-
-Publish:
-
-```powershell
-.\.venv\Scripts\python.exe deploy\push_to_hf_space.py --dry-run   # list the 38 files (89 MB)
-.\.venv\Scripts\python.exe deploy\push_to_hf_space.py             # -> <you>/malicious-url-detector
+```yaml
+services:
+  - type: web
+    name: malicious-url-detector
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/version
+    autoDeploy: true
+    envVars:
+      - key: PORT
+        value: "10000"
 ```
 
-The script checks that every file exists and that the model was saved with the scikit-learn
-version `requirements-serve.txt` pins; creates the Space with the Docker SDK if it does not
-exist; and uploads, in one commit, the files the Dockerfile copies plus `deploy/space_card.md`
-as the Space's `README.md` (its YAML header sets `sdk: docker` and `app_port: 7860`). Files a
-previous upload left behind are deleted in the same commit. Hugging Face then builds the image
-(a few minutes the first time) and the page appears at
-`https://huggingface.co/spaces/<you>/malicious-url-detector`. Options: `--space owner/name`,
-`--private`.
+1. Push the project to a GitHub repository (section 19.5). The compact model is committed
+   (40 MB, under GitHub's 50 MB warning size); the `.joblib` is not.
+2. Sign up at render.com with the GitHub account (no card needed for the free plan).
+3. **New → Blueprint**, pick the repository, **Apply**. Render builds the image from the
+   `Dockerfile` (a few minutes the first time) and checks `/api/version` before sending traffic.
+4. The page appears at `https://malicious-url-detector.onrender.com` (Render adds a suffix if
+   the name is taken).
 
-Free Spaces go to sleep after a couple of days without visitors and wake (in about a minute)
-on the next visit; open the page shortly before demonstrating it.
+With `autoDeploy`, every `git push` to `main` rebuilds and redeploys. A free service sleeps
+after 15 minutes without visitors; the next visit wakes it in about a minute, so open the page
+shortly before a demonstration. The 0.1 CPU share makes a live attack take a second or two.
+
+**Hugging Face** (PRO accounts): `hf auth login`, then
+`deploy\push_to_hf_space.py --dry-run` (39 files, 41 MB) and `deploy\push_to_hf_space.py`. The
+script checks the compact model is current, then uploads the same files the Dockerfile copies.
 
 ### 19.4 Updating the deployed page
 
-After retraining (and re-running `red_team.py`), run `push_to_hf_space.py` again. The model, reports and code go up together,
-so the online page always shows a consistent set; nothing in `web/` needs editing.
+After retraining, `train.py` writes a fresh compact model itself; re-run `red_team.py`, then
+commit and push. Render rebuilds automatically. The model, reports and code go up together, so
+the online page always shows a consistent set; nothing in `web/` needs editing. If the compact
+file ever falls behind the `.joblib` (for example after copying an old file), the server notices
+the mismatch of their SHA-256 fingerprints and serves the full model instead, and the upload
+script refuses to publish.
 
 ### 19.5 Putting the code on GitHub
 
-`.gitignore` already excludes the venv, `data/` and the model, so a repository holds only
-code, reports and figures (a few MB). Create the repository **inside the project folder**
-(`git init` there), add a short README pointing to the live Space, and push. The 88 MB model is
-under GitHub's 100 MB file limit but is better left out: the Space hosts it, and `train.py`
-rebuilds it.
+The repository lives **inside the project folder** (`git init` there; on this machine a
+repository rooted at the home folder also exists, and committing into that one would have
+swept in the whole user profile). `.gitignore` excludes the venv, the datasets and the 88 MB
+`.joblib`, but keeps `data/processed/prepare_report.json` (2 KB, read by the page) and the
+compact model (40 MB, needed by Render). Create an empty repository on github.com, then:
+
+```powershell
+git remote add origin https://github.com/<you>/malicious-url-detector.git
+git push -u origin main
+```
+
+Git Credential Manager opens the browser to sign in to GitHub on the first push.
 
 ---
 
@@ -1532,7 +1586,8 @@ rebuilds it.
 - Building an HTTP JSON API and a framework-free frontend that is driven entirely by data.
 - Exact model explanations, verified by unit tests.
 - Web security basics: input validation, CSP, MIME types, path traversal, request limits.
-- Containerisation and cloud deployment (Docker, Hugging Face Spaces).
+- Containerisation and cloud deployment (Docker, Render); fitting a model into a memory
+  budget without changing its answers.
 - Testing at two levels: logic (explanations) and HTTP (real server, bad inputs).
 
 **Security domain knowledge**
@@ -1556,7 +1611,8 @@ Pick two or three; every number is from the reports.
   features alone; tuned the forest to **one-eighth the default size** with no loss.
 - Shipped an interactive web demo (Python standard-library API + vanilla JavaScript) that
   scores URLs as they are typed and **decomposes each prediction exactly** into per-feature
-  contributions (unit-tested); containerised with Docker and deployed on Hugging Face Spaces.
+  contributions (unit-tested); containerised with Docker and deployed free on Render after
+  compiling the forest to flat arrays (**940 MB → 316 MB peak memory, identical predictions**).
 - **Red-teamed my own model**: built a beam-search attacker over priced, realistic URL edits that
   slipped **82.1 %** of caught phishing URLs past the model with one free edit; traced it to
   n-gram dilution and designed a **multi-view scoring defence** that cut it to **11.1 %** with no
@@ -1566,7 +1622,7 @@ Pick two or three; every number is from the reports.
   QR-code scanning against "quishing".
 
 Skills line: Python, scikit-learn, pandas, NumPy, feature engineering, model evaluation, data
-leakage, explainable ML, adversarial ML, REST API, JavaScript, Docker, Hugging Face, Git.
+leakage, explainable ML, adversarial ML, REST API, JavaScript, Docker, Render, Git.
 
 ## 22. Explaining the project in an interview
 
@@ -1740,6 +1796,12 @@ message checker. Showing a weakness, its cause and its fix lands far better than
 34. *How do you detect homoglyphs?* — Decode punycode, NFKC-normalise, map confusable
     characters (Cyrillic *а*, digit *1*, pair *rn*) to the Latin letter they imitate, and compare
     the skeleton with each brand; mixed scripts in one label are reported.
+35. *How did you host it for free?* — Loaded as scikit-learn objects the forest peaked
+    near 940 MB, too much for a 512 MB free plan. I exported the same trees to flat numpy
+    arrays (feature, threshold, children, leaf share) and wrote a vectorised traversal that
+    moves a whole batch down all 200 trees at once; tests show it equals `predict_proba` to
+    10⁻¹². The server now peaks at 316 MB and runs on Render's free plan. Key detail:
+    thresholds stay float64, because scikit-learn compares float32 inputs to float64 splits.
 
 **System design follow-up** — *"Design a link scanner for an email service."* Pipeline:
 extract URLs → normalise → allow-list / cache lookup → blocklist → this lexical model (fast,
@@ -1835,6 +1897,10 @@ value after `=`), `has_fragment`.
 | Windows spawns endless processes / `RuntimeError` about bootstrapping | code calling `extract_many` without an `if __name__ == "__main__":` guard (section 15.2) |
 | `download_data.py` fails with HTTP 4xx/5xx | the source moved or is down; re-run later (finished files are skipped) |
 | Hugging Face build fails | open the Space's *Logs* tab; most likely a changed version pin — keep `requirements-serve.txt` matching the model's scikit-learn version (the upload script checks) |
+| Hugging Face upload: `402 Payment Required` | Docker Spaces need PRO since 2026; deploy on Render instead (section 19.3) |
+| Server prints "…npz is older than …joblib; serving the full model" | run `python src/compact_forest.py`; until then it uses more memory |
+| Render: "Out of memory (used over 512Mi)" | the container is loading the `.joblib`: check the Dockerfile copies the `.npz` and that `requirements-serve.txt` has no pandas |
+| Render page takes about a minute to open | the free service was asleep after 15 idle minutes; it stays awake while in use |
 | Space shows "Sleeping" | free Spaces sleep when unused; opening the page wakes it in about a minute |
 | *Hardened (multi-view)* is greyed out on the page / `predict.py --hardened` refuses | `reports/red_team.json` is missing; run `red_team.py` (section 14, step 6b) |
 | *Use the camera* says no camera could be opened | the page must be on `http://127.0.0.1` or `https://` for camera access, and the browser must be allowed to use it; *Read it from a photo* always works |
@@ -1862,6 +1928,7 @@ value after `=`), `has_fragment`.
 | CSP | Content-Security-Policy: a header telling the browser which sources it may load |
 | Docker image / container | a packaged filesystem + command / a running instance of it |
 | Hugging Face Space | a hosted app repository on huggingface.co that builds and runs a demo |
+| Render Blueprint | a `render.yaml` file describing services that Render creates from a repository |
 | Red team | a party that attacks a system on purpose to find its weaknesses before real attackers do |
 | Evasion attack | changing an input at prediction time so a trained model misclassifies it |
 | Adaptive attack | an attack designed with knowledge of the defence it has to beat |
@@ -1895,7 +1962,8 @@ once, outside the project, to generate a test image.
 | 2026-11-13 | Added `evaluate_external.py` and section 9.4: the unchanged model scored on the Hannousse & Yahiouche (2021) dataset (test only, never trained on). Model, features and thresholds untouched. Added limitation 9 and a note that training is CPU-only. |
 | 2026-11-14 | Added the interactive demo page: `serve.py`, `explain.py`, `describe.py`, `web/` and `tests/test_explain.py`. `predict.py` now also keeps the bundle's `trained_at` date. Model, features, thresholds and all results untouched. |
 | 2026-11-24 | Document reorganised into four parts: added the from-scratch build guide (sections 12–16), website architecture and API (17), testing (18), deployment (19) and placement preparation (20–24), plus feature reference, troubleshooting and glossary. Demo hardened for public hosting: `serve.py` gained `--host` and `PORT`/`HOST` variables, explicit MIME types (fixes `.js` served as `text/plain` on some Windows machines), security headers, no folder listings and connection timeouts; `/api/score` now rejects non-string input (`null` used to be scored as the text "None") and text the training data dropped as junk; the page words the server-down notice for hosted use and shows "keep typing" hints quietly. Added `Dockerfile`, `.dockerignore`, `requirements-serve.txt` and `deploy/` (Hugging Face Spaces upload). Tests grew from 11 to 17, including HTTP tests. Model, features, thresholds and all results untouched. |
-| 2026-11-24 | **Red team and defences.** Added `adversary.py` (beam-search attacker over 15 priced edits), `hardening.py` (multi-view scorer) and `red_team.py` → `reports/red_team.json`: on 400 external phishing URLs from unseen sites, one free edit evades the model as trained 82.1 % of the time and the hardened scorer 11.1 %; hardened cut-offs chosen on validation (balanced 0.534, strict 0.840). Added `lookalike.py` (brand impersonation rules, measured at 0.03 % benign flags externally) and `triage.py` (links in a message: refanging, hidden targets). New sections 9.5–9.7, 15.11–15.14, limitations 10–11, interview questions 27–34. Demo: lookalike panel, QR reader (jsQR vendored), *Try to sneak it past the model*, *Check a whole message* with CSV, robustness report; new endpoints `/api/attack`, `/api/triage`; `predict.py --hardened`; two new figures. Dockerfile and upload script copy `red_team.json` (38 files). Tests 17 → 34. The trained model, its features, its thresholds and every result in sections 1–9.4 are untouched. |
+| 2026-11-24 | **Red team and defences.** Added `adversary.py` (beam-search attacker over 15 priced edits), `hardening.py` (multi-view scorer) and `red_team.py` → `reports/red_team.json`: on 400 external phishing URLs from unseen sites, one free edit evades the model as trained 82.1 % of the time and the hardened scorer 11.1 %; hardened cut-offs chosen on validation (balanced 0.534, strict 0.840). Added `lookalike.py` (brand impersonation rules, measured at 0.03 % benign flags externally) and `triage.py` (links in a message: refanging, hidden targets). New sections 9.5–9.7, 15.11–15.14, limitations 10–11, interview questions 27–34 (35 added with free hosting). Demo: lookalike panel, QR reader (jsQR vendored), *Try to sneak it past the model*, *Check a whole message* with CSV, robustness report; new endpoints `/api/attack`, `/api/triage`; `predict.py --hardened`; two new figures. Dockerfile and upload script copy `red_team.json` (38 files). Tests 17 → 34. The trained model, its features, its thresholds and every result in sections 1–9.4 are untouched. |
+| 2026-11-24 | **Free hosting.** Hugging Face now requires PRO for Docker Spaces (upload refused with 402). Added `compact_forest.py`: the forest as flat arrays (`models/malicious_url_rf.npz`, 40 MB, no pickle) with a vectorised traversal; identical to `predict_proba` within 10⁻¹² (7.8 × 10⁻¹⁶ measured on 20,000 URLs). `serve.py` serves it when its SHA-256 matches the `.joblib`; `train.py` writes it after saving; `explain.py` walks it. pandas imported lazily in `learned_features.py` and dropped from `requirements-serve.txt`. Measured server peak 316 MB (was ~940 MB). Added `render.yaml`; the Dockerfile ships the `.npz` instead of the `.joblib`; the upload script checks it is current (39 files, 41 MB). Section 19 rewritten for Render; new section 15.15; `tests/test_compact.py` (tests 34 → 39). Model, thresholds and all results untouched. |
 
 ## References
 

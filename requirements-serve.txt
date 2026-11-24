@@ -1,9 +1,10 @@
 # Only what the demo server (src/serve.py) needs at run time - used by the Dockerfile.
 # The full pipeline (download, prepare, train, figures) needs requirements.txt instead.
-# scikit-learn must be the version that saved the model, or the model will not load.
+# The server loads the compact model (no pickle), so scikit-learn is only used for its
+# HashingVectorizer; it stays pinned to the training version so hashing is identical.
+# pandas is left out on purpose: scikit-learn runs without it, and it costs memory.
 scikit-learn==1.9.1
 numpy==2.5.4
 scipy==1.18.1
-pandas==3.1.1
 joblib==1.6.0
 tldextract==5.4.0
