@@ -674,6 +674,79 @@ average is the candidate worth adopting later (listed in section 11), through `t
 test buckets are still read once. Numbers: `reports/stacking.json`; the run took
 16.6 minutes.
 
+### 9.9 Experiment: combining the forest with k-nearest neighbours and SVMs (`ensemble_experiment.py`)
+
+**The idea.** Different kinds of model make different mistakes: a forest splits on one feature
+at a time, k-nearest neighbours (KNN) looks at the most similar training URLs, and a support
+vector machine (SVM) draws one smooth boundary through all features at once. Used together,
+their mistakes might cancel out.
+
+**The members**, all trained on the training sites with the same 56 features (scaled to mean 0
+and variance 1 for KNN and the SVMs):
+
+| Member | Trained on | Setting chosen on validation half A |
+|---|---|---|
+| Random forest | the saved model (section 8) | — |
+| k-nearest neighbours, distance-weighted | a random 100,000-row sample | k = 45 (from 5, 15, 45) |
+| Linear SVM | all 1,126,862 training rows | C = 0.1 (from 0.1, 1) |
+| SVM with RBF kernel | a random 20,000-row sample (6,609 support vectors) | C = 1.0 (from 1, 10) |
+
+KNN and the kernel SVM compare a URL with stored training URLs, so their cost grows with the
+training set — all 1.1 M rows would take hours — which is why they learn from samples. One
+neighbour search serves all three values of k (the distance-weighted vote is recomputed from
+the same neighbour lists; checked to equal scikit-learn's `KNeighborsClassifier` to 10⁻¹⁵), and
+the kernel SVM's predictions are spread over all CPU cores.
+
+**The combinations**, all learned on validation half A only:
+
+- **Soft vote** — each member's score is turned into a probability by Platt scaling (a
+  one-feature logistic regression on half A; an SVM gives a margin, not a probability), then
+  the probabilities are averaged. Tried for all four and for the forest with each partner.
+- **Learned blend** — a logistic regression on the four members' scores decides how much to
+  trust each one (stacking with a held-out blending set).
+
+Rules as in section 9.8: the test buckets are not read; half A (74,598
+URLs) chooses every setting, weight and cut-off; half B (81,014
+URLs) and the external dataset (5,839 URLs on unseen sites) report.
+
+| Model | Val-B PR-AUC | Val-B F1 | Val-B recall at ≤ 1 % false alarms | External PR-AUC | External ROC-AUC | External F1 | External false alarms |
+|---|---|---|---|---|---|---|---|
+| **Random forest alone (saved model)** | 0.9469 | 0.8715 | 0.658 | 0.8955 | 0.9405 | 0.8215 | 14.0 % |
+| k-nearest neighbours alone | 0.9224 | 0.8359 | 0.559 | 0.8609 | 0.9124 | 0.7894 | 13.1 % |
+| Linear SVM alone | 0.9199 | 0.8427 | 0.504 | 0.8746 | 0.9231 | 0.7970 | 15.6 % |
+| RBF-kernel SVM alone | 0.9300 | 0.8503 | 0.604 | 0.8905 | 0.9324 | 0.8024 | 17.0 % |
+| vote: forest + KNN | 0.9421 | 0.8642 | 0.606 | 0.9036 | 0.9409 | 0.8212 | 12.6 % |
+| vote: forest + RBF SVM | 0.9412 | 0.8666 | 0.647 | 0.9030 | 0.9418 | 0.8239 | 12.6 % |
+| vote: forest + KNN + both SVMs | 0.9394 | 0.8626 | 0.594 | 0.9075 | 0.9429 | 0.8174 | 13.8 % |
+| learned blend of all four | 0.9437 | 0.8700 | 0.664 | 0.8975 | 0.9409 | 0.8271 | 12.9 % |
+
+**What it shows.**
+
+1. **KNN and the SVMs are clearly weaker on their own** — 1.7 to 2.7 points of PR-AUC behind the
+   forest on validation. Averaging a strong model with weaker ones pulls it down: on the
+   validation sites **every combination scores below the forest alone**.
+2. **On the external dataset the combinations do slightly better**: the four-way vote has the
+   best PR-AUC (0.9075 against
+   0.8955) and the learned blend the best F1
+   (0.8271 against 0.8215,
+   with false alarms 12.9 % against
+   14.0 %). These gaps are about the size of the
+   sampling noise: a recall measured on the 2,019 external phishing URLs has a standard error of
+   about 0.7 points.
+3. **The learned blend says it directly.** Its weights (on standardised scores) are forest
+   2.30, RBF SVM 0.81, KNN -0.11 and linear SVM -0.38:
+   almost all the trust goes to the forest, KNN and the linear SVM are given *negative* weight,
+   and only the kernel SVM adds a little. They see the same 56 features and mostly repeat what
+   the forest already knows, less accurately.
+
+**Decision.** The combination was **not adopted**: no gain on the validation sites, a gain on
+the external dataset within noise, and real costs — the server would have to hold a 100,000-row
+neighbour index and the SVM's support vectors, scoring would be slower, and the page's exact
+explanation (section 15.10) covers only the forest. Together with section 9.8 the conclusion is
+consistent: on these features, other model families and ensembles do not beat the tuned forest
+by a margin worth its cost; better *features* (section 11) are the more promising path. Numbers:
+`reports/ensemble.json`; the run took 11.9 minutes.
+
 ## 10. Limitations
 
 1. **False alarms on legitimate login and shopping pages.** In a spot check the model flagged
@@ -808,6 +881,7 @@ Mini project/
 │   ├── triage.py               finds and ranks every link in a message
 │   ├── compact_forest.py     the forest as flat arrays, for serving -> models/*.npz
 │   ├── stacking_experiment.py  experiment: boosting / stacking vs the forest -> reports/stacking.json
+│   ├── ensemble_experiment.py  experiment: forest + KNN + SVMs combined -> reports/ensemble.json
 │   ├── predict.py            score URLs (CLI + UrlClassifier class)
 │   ├── serve.py              demo web server
 │   ├── explain.py              explains one prediction for the page
@@ -820,7 +894,8 @@ Mini project/
 ├── render.yaml               Render Blueprint (free hosting)
 ├── data/                     raw + processed data (git-ignored; re-creatable)
 ├── models/                   the trained model (.joblib, git-ignored) and its compact copy (.npz)
-└── reports/                  metrics.json, external_eval.json, red_team.json, stacking.json, figures/
+└── reports/                  metrics.json, external_eval.json, red_team.json, stacking.json,
+                              ensemble.json, figures/
 ```
 
 The flow is strictly one-way, and each step only reads what earlier steps wrote:
@@ -1286,6 +1361,7 @@ parameters, and the SHA-256 of the `.joblib` it came from): 40 MB instead of 88 
 | Beam search over edits | gradient attacks, random mutation | forests have no gradient; random mutation wastes queries; meaningful edits keep every example deployable |
 | Defence at scoring time (max over views) | retrain on attacked examples | no retraining, model file unchanged, measurable in minutes; adversarial training is listed as an improvement |
 | Attack the external dataset | attack the test buckets | the test buckets are used once, by train.py |
+| Keep the random forest alone | combine it with KNN and SVMs (vote or learned blend) | measured in section 9.9: below the forest on validation, within noise externally; the blend itself gives KNN and the linear SVM negative weight |
 | Keep the random forest | stack a gradient-boosted model on it | measured in section 9.8: no gain over boosting alone and worse on the external dataset; the forest keeps exact explanations |
 | Lookalike as a separate layer | add it as a model feature | precise rules for a rare pattern; kept out of the score so the model's results stay exactly as measured |
 | QR decoded in the browser | upload the image | the image never leaves the visitor's machine; only the decoded text is scored |
@@ -1921,6 +1997,14 @@ message checker. Showing a weakness, its cause and its fix lands far better than
     forest and booster was the most robust. So I kept the forest and recorded the result: a
     technique that looks good on in-distribution validation can transfer worse.
 
+37. *Did you try KNN or SVMs, or combining them with the forest?* — Yes (section 9.9).
+    Alone they were 1.7–2.7 PR-AUC points behind the forest (KNN needs a 100,000-row sample and a
+    kernel SVM a 20,000-row sample to stay practical on 1.1 M URLs). Combined by soft voting or a
+    learned blend, they scored *below* the forest on validation, and only slightly above it on the
+    external dataset, within sampling noise. The learned blend gave KNN and the linear SVM
+    negative weights. Lesson: an ensemble helps when its members are comparably strong and make
+    different mistakes; here they were weaker and saw the same features.
+
 **System design follow-up** — *"Design a link scanner for an email service."* Pipeline:
 extract URLs → normalise → allow-list / cache lookup → blocklist → this lexical model (fast,
 every link) → for the uncertain band, a slower check (sandboxed fetch, page content,
@@ -1932,7 +2016,10 @@ Discuss latency budget, false-positive cost, drift monitoring and adversaries ad
 - Bias–variance trade-off; overfitting and regularisation in trees.
 - Decision trees: Gini, entropy, information gain, pruning, depth and leaf-size limits.
 - Ensembles: bagging, random forests, boosting (AdaBoost, gradient boosting, XGBoost,
-  LightGBM / histogram boosting), blending and stacking with out-of-fold predictions.
+  LightGBM / histogram boosting), blending and stacking with out-of-fold predictions; soft
+  voting and Platt scaling; why an ensemble of weaker, correlated members does not help.
+- k-nearest neighbours (distance weighting, scaling, cost at prediction time) and SVMs (margin,
+  C, kernels, the RBF kernel's γ, why kernel SVMs do not scale to millions of rows).
 - Naive Bayes and Laplace smoothing; log-odds.
 - Confusion matrix; precision, recall, F1, ROC and PR curves, AUC; threshold tuning.
 - Cross-validation, group k-fold, stratification, train/validation/test roles.
@@ -2064,6 +2151,10 @@ value after `=`), `has_fragment`.
 | Defanging | writing a live link so it cannot be clicked (`hxxp://evil[.]com`) |
 | Stacking | training a second model on the first model's (out-of-fold) predictions, here together with the original features ("passthrough") |
 | Blending / averaging | combining models by averaging their scores, with no second model |
+| Soft voting | averaging the members' probabilities (rather than counting their yes/no votes) |
+| Platt scaling | turning a score such as an SVM margin into a probability with a one-feature logistic regression |
+| k-nearest neighbours (KNN) | classifying by the labels of the k most similar training examples |
+| Support vector machine (SVM) | a classifier that finds the boundary with the widest margin between classes; a kernel (RBF) lets the boundary curve |
 | Quishing | phishing through a QR code |
 
 ## Appendix D. Tools used during development
@@ -2091,6 +2182,7 @@ once, outside the project, to generate a test image.
 | 2026-11-24 | **Red team and defences.** Added `adversary.py` (beam-search attacker over 15 priced edits), `hardening.py` (multi-view scorer) and `red_team.py` → `reports/red_team.json`: on 400 external phishing URLs from unseen sites, one free edit evades the model as trained 82.1 % of the time and the hardened scorer 11.1 %; hardened cut-offs chosen on validation (balanced 0.534, strict 0.840). Added `lookalike.py` (brand impersonation rules, measured at 0.03 % benign flags externally) and `triage.py` (links in a message: refanging, hidden targets). New sections 9.5–9.7, 15.11–15.14, limitations 10–11, interview questions 27–34 (35 added with free hosting). Demo: lookalike panel, QR reader (jsQR vendored), *Try to sneak it past the model*, *Check a whole message* with CSV, robustness report; new endpoints `/api/attack`, `/api/triage`; `predict.py --hardened`; two new figures. Dockerfile and upload script copy `red_team.json` (38 files). Tests 17 → 34. The trained model, its features, its thresholds and every result in sections 1–9.4 are untouched. |
 | 2026-11-24 | **Free hosting.** Hugging Face now requires PRO for Docker Spaces (upload refused with 402). Added `compact_forest.py`: the forest as flat arrays (`models/malicious_url_rf.npz`, 40 MB, no pickle) with a vectorised traversal; identical to `predict_proba` within 10⁻¹² (7.8 × 10⁻¹⁶ measured on 20,000 URLs). `serve.py` serves it when its SHA-256 matches the `.joblib`; `train.py` writes it after saving; `explain.py` walks it. pandas imported lazily in `learned_features.py` and dropped from `requirements-serve.txt`. Measured server peak 316 MB (was ~940 MB). Added `render.yaml`; the Dockerfile ships the `.npz` instead of the `.joblib`; the upload script checks it is current (39 files, 41 MB). Section 19 rewritten for Render; new section 15.15; `tests/test_compact.py` (tests 34 → 39). Model, thresholds and all results untouched. |
 | 2026-11-24 | Demo live at https://malicious-url-detector-33wl.onrender.com. The page header no longer shows the training date (it still comes back from `/api/state`). |
+| 2026-11-24 | **KNN + SVM ensemble experiment** (section 9.9, `ensemble_experiment.py` → `reports/ensemble.json`): KNN (100,000-row sample, k = 45), linear SVM (all rows), RBF SVM (20,000-row sample), combined with the forest by soft voting and by a learned blend; same halves-of-validation and external protocol, test buckets not read. Not adopted: every combination below the forest on validation (forest PR-AUC 0.9469, best combination 0.9437), external gains within noise. Interview question 37. A first attempt to add KNN and SVM as test-set baselines in `train.py` was stopped in its first step and reverted, so the test sites were not scored by them. The saved model and all earlier results unchanged. |
 | 2026-11-24 | **Stacking experiment** (section 9.8, `stacking_experiment.py` → `reports/stacking.json`): gradient boosting alone, a forest + booster average and stacking with passthrough (out-of-fold forest score by site bucket), tuned on half the validation sites, reported on the other half and the external dataset; test buckets not read. Stacking not adopted (best validation PR-AUC 0.9525 vs forest 0.9469, but booster alone 0.9523, and worst externally); the average listed as the next improvement. Interview question 36. The saved model and all earlier results unchanged. |
 | 2026-11-24 | Documented the deployment as done: live and repository links at the top and in sections 1, 19.5 and 21; GitHub and Render accounts in section 12.1; train.py writing the compact model (step 4); the compact model in the architecture (17.2); how memory was measured and the Windows launcher pitfall, and the checks run against the live site (18); Render's Blueprint path and the `x-render-routing: no-server` diagnosis of the suffixed address (19.3); three troubleshooting rows; tools used. No code or result changed. |
 

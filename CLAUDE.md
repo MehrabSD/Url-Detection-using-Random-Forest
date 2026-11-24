@@ -26,6 +26,8 @@
   Keep `scikit-learn` in `requirements-serve.txt` equal to the version that saved the model.
 - `src/stacking_experiment.py` -> `reports/stacking.json`: boosting / averaging / stacking vs the
   forest (validation halves + external data; never the test buckets). Stacking was not adopted.
+- `src/ensemble_experiment.py` -> `reports/ensemble.json`: forest + KNN + SVMs (vote, learned blend),
+  same protocol. Not adopted: below the forest on validation, external gains within noise.
 - `src/compact_forest.py` -> `models/malicious_url_rf.npz`: the forest as flat arrays, which
   the server and the container use (fits Render's free 512 MB; `render.yaml`). train.py writes
   it; after replacing the .joblib any other way, run it by hand. It must stay committed to git
