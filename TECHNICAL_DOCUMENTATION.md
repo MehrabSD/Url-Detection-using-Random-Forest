@@ -5,6 +5,9 @@
 which the scripts regenerate on each run. Figures that are not model results (memory use, request times) are
 labelled as measurements.*
 
+- **Live demo:** https://malicious-url-detector-33wl.onrender.com (free plan; the first visit after a quiet spell takes about a minute)
+- **Source code:** https://github.com/MehrabSD/Url-Detection-using-Random-Forest
+
 This document has four parts:
 
 - **Part A — What was built and how well it works** (sections 1–11): data, features, model,
@@ -75,6 +78,7 @@ benign or malicious (phishing, malware delivery or a defaced page). It never vis
 | **Defence (section 9.6)** | multi-view scoring cuts that to **11.1 %** with no retraining; on the external dataset F1 0.820 → 0.824 and false alarms 14.5 % → 12.1 %; on validation F1 0.861 → 0.840 |
 | Extra layers | a rule-based lookalike-domain check (typosquats, homoglyphs, punycode; section 9.7), inbox triage of whole messages, and QR-code reading (section 17) |
 | Demo | a web page that scores a URL as it is typed, explains the verdict, attacks it live and checks whole messages (section 17), hosted free on Render from a compact copy of the forest (316 MB peak memory, identical predictions; section 19) |
+| Links | live: https://malicious-url-detector-33wl.onrender.com · code: https://github.com/MehrabSD/Url-Detection-using-Random-Forest |
 
 These figures are lower than the 97–99 % often quoted for this task. Section 5 shows why: the
 usual evaluation lets the same websites appear in both training and test data, and the most
@@ -106,6 +110,8 @@ evaluate_external.py  score the saved model on a
 red_team.py         attack the model, calibrate and
                     measure the multi-view defence,
                     evaluate the lookalike check  -> reports/red_team.json
+compact_forest.py   the forest as flat arrays     -> models/malicious_url_rf.npz
+                    (run by train.py; served by the demo)
 predict.py          score new URLs (command line / Python; --hardened)
 serve.py            demo web page (web/) on top of the saved model and reports
 ```
@@ -685,7 +691,8 @@ choice was made.
 | RAM | 16 GB | 16 GB recommended for `train.py` (not tested on less); about 320 MB for the demo server |
 | Disk | — | `data/` 358 MB (185 MB download + 131 MB processed table) and the 88 MB model, plus the Python packages |
 | GPU | not used | — scikit-learn's random forest runs on the CPU only |
-| Network | for `download_data.py` only | nothing else ever goes online |
+| Network | for `download_data.py`, and `git push` when deploying | the model and the demo never go online to score a URL |
+| Accounts | GitHub and Render (both free) | only to publish the demo (section 19); no card is needed |
 
 ### 12.2 Knowledge assumed
 
@@ -839,6 +846,9 @@ Six steps, each logged with a timestamp:
 | 4 search | 9 configurations × 60 trees, train → validation; pick the smallest within 0.002 PR-AUC of the best | `search` |
 | 5 final | 200-tree forest; validation PR-AUC by number of trees; the three thresholds | `trees_curve`, `thresholds`, `validation` |
 | 6 test | score the test sites **once**; per-source and per-kind results; confident errors; baselines; feature importance | `test`, `comparison`, `feature_importance` |
+
+Right after saving, `train.py` also writes `models/malicious_url_rf.npz`, the compact copy
+the demo server loads (section 15.15).
 
 The model is saved as a **bundle** — a dict holding the forest, the fitted
 `LearnedFeatures` object, the feature names, the thresholds, `trained_at` and the
@@ -1289,7 +1299,7 @@ browser ── GET /, /app.js, /style.css, /fonts/... ──> serve.py ── fi
         ── GET  /api/version ──> fingerprint of model + report files (polled every 4 s)
         ── POST /api/score   ──> explain.Explainer.explain(url) + lookalike.check(url)
                                    └─ predict.UrlClassifier (features + learned features)
-                                   └─ the forest's trees, walked in Python
+                                   └─ the compact forest's arrays, walked in Python
         ── POST /api/attack  ──> adversary.attack(scorer, url, cut-off)
                                    └─ scorer = UrlClassifier or hardening.HardenedScorer
         ── POST /api/triage  ──> triage.triage(text) -> one batch through UrlClassifier
@@ -1297,7 +1307,9 @@ browser-only: QR images decoded by web/vendor/jsQR.js; CSV built from the triage
 ```
 
 - **Server**: `http.server.ThreadingHTTPServer` with a `SimpleHTTPRequestHandler` subclass —
-  standard library only, one thread per request. The model is loaded once; a `Model` wrapper
+  standard library only, one thread per request. It loads the compact model
+  (`models/malicious_url_rf.npz`) when that file was made from the current `.joblib` (their
+  SHA-256 fingerprints match), otherwise the `.joblib`. The model is loaded once; a `Model` wrapper
   compares the file's modification time and size on each request and reloads under a lock if
   `train.py` has written a new one.
 - **Frontend**: six ES modules with no framework and no build step. `util.js` has an `el()`
@@ -1436,6 +1448,27 @@ code generated for `http://free-gift-card-winner.tk/claim.php`, uploaded through
 a photo*, decoded, filled in and scored malicious; the lookalike alignment for
 `paypa1-support.com`; no horizontal scrolling at 390 px.
 
+**Memory measurement** (section 19.1). The server was started as a separate process, every
+endpoint was exercised (`/api/state`, a score, a hardened attack, a 120-link message), and the
+process's resident memory and peak working set were read with `psutil` (installed in the venv
+for this measurement only; it is not a project requirement). Pitfall found on the way: on
+Windows the venv's `python.exe` is a small launcher that starts the real interpreter as a
+*child* process, so measuring the launcher reports about 5 MB; the figures above are the
+child's. The compact model was also checked to run with pandas made unimportable
+(`sys.modules["pandas"] = None`), as it is in the container.
+
+**Live deployment checks** on https://malicious-url-detector-33wl.onrender.com (24 November 2026, measured from this laptop; server-side
+times are the `milliseconds` field each endpoint returns, so they exclude the network):
+
+| Check | Result |
+|---|---|
+| page (`/`) | HTTP 200 in 0.39 s |
+| `/api/state` | 200 trees, 56 features, model file `malicious_url_rf.npz` |
+| `/api/score` with `paypa1.com/signin` | score 0.68; lookalike technique `swap`; 7.4 ms |
+| `/api/attack`, hardened scorer, `free-gift-card-winner.tk/claim.php` | path found in 1 edit; 106.6 ms |
+| `/api/triage` with a defanged link | `hxxp://194.48.152[.]10/bins/x.sh` read as `194.48.152.10/bins/x.sh` |
+| `/vendor/jsQR.js` | HTTP 200 (QR decoding works offline in the visitor's browser) |
+
 ## 19. Deployment
 
 ### 19.1 Where it can run
@@ -1501,10 +1534,18 @@ services:
 1. Push the project to a GitHub repository (section 19.5). The compact model is committed
    (40 MB, under GitHub's 50 MB warning size); the `.joblib` is not.
 2. Sign up at render.com with the GitHub account (no card needed for the free plan).
-3. **New → Blueprint**, pick the repository, **Apply**. Render builds the image from the
-   `Dockerfile` (a few minutes the first time) and checks `/api/version` before sending traffic.
+3. **New → Blueprint**, pick the repository. Render asks for the **Blueprint path**: enter
+   `render.yaml` (the file is at the top of the repository). Then **Apply**. Render shows the
+   commit it deploys (its hash and message), builds the image from the `Dockerfile` (a few
+   minutes the first time) and checks `/api/version` before sending traffic.
 4. The page appears at `https://<name>.onrender.com`; Render adds a suffix when the name is
    taken, as it did here: **https://malicious-url-detector-33wl.onrender.com**.
+
+**Finding the address.** The name in `render.yaml` was already taken on Render, so the
+service got a suffix. Requests to the unsuffixed name answered `404` with the response header
+`x-render-routing: no-server`, which means *no service has this hostname* (as opposed to a
+service that is still starting); the real address is the one shown at the top of the
+service's page in the dashboard.
 
 With `autoDeploy`, every `git push` to `main` rebuilds and redeploys. A free service sleeps
 after 15 minutes without visitors; the next visit wakes it in about a minute, so open the page
@@ -1529,14 +1570,18 @@ The repository lives **inside the project folder** (`git init` there; on this ma
 repository rooted at the home folder also exists, and committing into that one would have
 swept in the whole user profile). `.gitignore` excludes the venv, the datasets and the 88 MB
 `.joblib`, but keeps `data/processed/prepare_report.json` (2 KB, read by the page) and the
-compact model (40 MB, needed by Render). Create an empty repository on github.com, then:
+compact model (40 MB, needed by Render). Create an **empty** repository on github.com (no
+README, `.gitignore` or licence, so the first push has nothing to merge), then:
 
 ```powershell
-git remote add origin https://github.com/<you>/malicious-url-detector.git
+git remote add origin https://github.com/MehrabSD/Url-Detection-using-Random-Forest.git
 git push -u origin main
 ```
 
-Git Credential Manager opens the browser to sign in to GitHub on the first push.
+Git Credential Manager opens the browser to sign in to GitHub on the first push. This
+project's repository is **https://github.com/MehrabSD/Url-Detection-using-Random-Forest** (public); it holds about 37 MB, most of it the compact
+model. After the push, the raw files were fetched from outside to confirm that `render.yaml`
+and the `.npz` are real files (not Git LFS pointers), which Render needs to build.
 
 ---
 
@@ -1621,6 +1666,8 @@ Pick two or three; every number is from the reports.
   inbox triage tool that extracts, refangs and ranks every link in an email, plus in-browser
   QR-code scanning against "quishing".
 
+Links for the resume: live demo https://malicious-url-detector-33wl.onrender.com · code https://github.com/MehrabSD/Url-Detection-using-Random-Forest.
+
 Skills line: Python, scikit-learn, pandas, NumPy, feature engineering, model evaluation, data
 leakage, explainable ML, adversarial ML, REST API, JavaScript, Docker, Render, Git.
 
@@ -1657,7 +1704,8 @@ that number is now 11 %."
    it flags real login pages, so in practice it needs an allow-list; and it can still be evaded
    by an attacker who pays for new domains.
 
-**Demo tip** (three minutes): open the live page and click *Lookalike sign-in* — flagged, with
+**Demo tip** (three minutes): open the live page (https://malicious-url-detector-33wl.onrender.com; open it a minute early in
+case it is asleep) and click *Lookalike sign-in* — flagged, with
 the lookalike panel showing `paypal.com` is not the real site. Scroll to *Try to sneak it past
 the model* and press *Run the attack*: two free edits and it passes. Switch to *Hardened* and
 run it again: now it needs three new domains. Then type `paypa1.com`: the model passes it, the
@@ -1901,6 +1949,9 @@ value after `=`), `has_fragment`.
 | Server prints "…npz is older than …joblib; serving the full model" | run `python src/compact_forest.py`; until then it uses more memory |
 | Render: "Out of memory (used over 512Mi)" | the container is loading the `.joblib`: check the Dockerfile copies the `.npz` and that `requirements-serve.txt` has no pandas |
 | Render page takes about a minute to open | the free service was asleep after 15 idle minutes; it stays awake while in use |
+| Render asks for a "Blueprint path" | enter `render.yaml` |
+| The `.onrender.com` address answers `404 Not Found` with header `x-render-routing: no-server` | no service has that hostname: the name was taken and Render added a suffix (use the address on the service's page), or the first deploy has not finished; check the service's status and *Logs* |
+| `git push` rejected (`fetch first`) | the GitHub repository was created with a README or licence; create it empty, or `git pull --rebase origin main` first |
 | Space shows "Sleeping" | free Spaces sleep when unused; opening the page wakes it in about a minute |
 | *Hardened (multi-view)* is greyed out on the page / `predict.py --hardened` refuses | `reports/red_team.json` is missing; run `red_team.py` (section 14, step 6b) |
 | *Use the camera* says no camera could be opened | the page must be on `http://127.0.0.1` or `https://` for camera access, and the browser must be allowed to use it; *Read it from a photo* always works |
@@ -1950,7 +2001,9 @@ and everything else is standard Python. For the demo page three skills were inst
 it at desktop and phone widths in light and dark mode). The built-in data-visualisation skill
 was used for the chart conventions (colour palette checked for colour-blind safety, one hue for
 ranked bars, labelled values). A `CLAUDE.md` file keeps future AI-assisted sessions in step
-with this document. Deployment uses Docker and the `huggingface_hub` library. The QR reader
+with this document. Deployment uses Docker, GitHub (pushed with Git Credential Manager) and
+Render's Blueprint (`render.yaml`); the `huggingface_hub` library remains for PRO accounts.
+`psutil` was installed in the venv once to measure the server's memory (section 18). The QR reader
 bundles jsQR 1.4.0 (Apache 2.0, licence in `web/vendor/`); the `qrcode` npm package was used
 once, outside the project, to generate a test image.
 
@@ -1965,6 +2018,7 @@ once, outside the project, to generate a test image.
 | 2026-11-24 | **Red team and defences.** Added `adversary.py` (beam-search attacker over 15 priced edits), `hardening.py` (multi-view scorer) and `red_team.py` → `reports/red_team.json`: on 400 external phishing URLs from unseen sites, one free edit evades the model as trained 82.1 % of the time and the hardened scorer 11.1 %; hardened cut-offs chosen on validation (balanced 0.534, strict 0.840). Added `lookalike.py` (brand impersonation rules, measured at 0.03 % benign flags externally) and `triage.py` (links in a message: refanging, hidden targets). New sections 9.5–9.7, 15.11–15.14, limitations 10–11, interview questions 27–34 (35 added with free hosting). Demo: lookalike panel, QR reader (jsQR vendored), *Try to sneak it past the model*, *Check a whole message* with CSV, robustness report; new endpoints `/api/attack`, `/api/triage`; `predict.py --hardened`; two new figures. Dockerfile and upload script copy `red_team.json` (38 files). Tests 17 → 34. The trained model, its features, its thresholds and every result in sections 1–9.4 are untouched. |
 | 2026-11-24 | **Free hosting.** Hugging Face now requires PRO for Docker Spaces (upload refused with 402). Added `compact_forest.py`: the forest as flat arrays (`models/malicious_url_rf.npz`, 40 MB, no pickle) with a vectorised traversal; identical to `predict_proba` within 10⁻¹² (7.8 × 10⁻¹⁶ measured on 20,000 URLs). `serve.py` serves it when its SHA-256 matches the `.joblib`; `train.py` writes it after saving; `explain.py` walks it. pandas imported lazily in `learned_features.py` and dropped from `requirements-serve.txt`. Measured server peak 316 MB (was ~940 MB). Added `render.yaml`; the Dockerfile ships the `.npz` instead of the `.joblib`; the upload script checks it is current (39 files, 41 MB). Section 19 rewritten for Render; new section 15.15; `tests/test_compact.py` (tests 34 → 39). Model, thresholds and all results untouched. |
 | 2026-11-24 | Demo live at https://malicious-url-detector-33wl.onrender.com. The page header no longer shows the training date (it still comes back from `/api/state`). |
+| 2026-11-24 | Documented the deployment as done: live and repository links at the top and in sections 1, 19.5 and 21; GitHub and Render accounts in section 12.1; train.py writing the compact model (step 4); the compact model in the architecture (17.2); how memory was measured and the Windows launcher pitfall, and the checks run against the live site (18); Render's Blueprint path and the `x-render-routing: no-server` diagnosis of the suffixed address (19.3); three troubleshooting rows; tools used. No code or result changed. |
 
 ## References
 
