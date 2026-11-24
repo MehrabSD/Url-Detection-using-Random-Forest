@@ -84,7 +84,7 @@ class ModelLayersTest(unittest.TestCase):
             self.assertIn(move, seen_moves)
 
     def test_attack_path_is_scored_by_the_real_model(self):
-        r = adversary.attack(self.clf, "http://free-gift-card-winner.tk/claim.php", self.cut)
+        r = adversary.attack(self.clf, "http://paypal.com.secure-login-verify.xyz/webscr?cmd=_login", self.cut)
         self.assertTrue(r["found"])
         self.assertLess(r["final_score"], self.cut)
         # every step's score is exactly what the model says about that step's URL
@@ -178,7 +178,7 @@ class ServerTest(unittest.TestCase):
         self.assertEqual(body["lookalike"]["findings"][0]["technique"], "swap")
 
     def test_attack_endpoint(self):
-        status, body = self.post("/api/attack", {"url": "http://free-gift-card-winner.tk/claim.php",
+        status, body = self.post("/api/attack", {"url": "http://paypal.com.secure-login-verify.xyz/webscr?cmd=_login",
                                                  "mode": "balanced", "defence": "plain"})
         self.assertEqual(status, 200)
         self.assertTrue(body["found"])

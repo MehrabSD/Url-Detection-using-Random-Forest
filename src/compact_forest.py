@@ -1,6 +1,10 @@
-"""The trained forest as a few flat arrays: same predictions, a fraction of the memory.
+"""The trained model as a few flat arrays: same predictions, a fraction of the memory.
 
     python src/compact_forest.py        # models/malicious_url_rf.joblib -> models/malicious_url_rf.npz
+
+The model is a random forest averaged with a gradient-boosted model (train.py).
+Both are trees, so both are stored the same way: CompactForest below for the
+forest, CompactBooster for the booster (arrays prefixed b_ in the file).
 
 Why. scikit-learn keeps each of the 200 trees as its own object, with a 64-byte
 record per node plus a separate array of class counts. Loading the 4.98 million
@@ -98,12 +102,91 @@ class CompactForest:
         return self.left[node] == node
 
 
+class CompactBooster:
+    """The gradient-boosted half of the model as flat arrays, like CompactForest.
+
+    scikit-learn's HistGradientBoostingClassifier adds up one small tree per
+    boosting round in log-odds and turns the sum into a probability:
+
+        log-odds = baseline + sum over rounds of the leaf value reached
+        probability = 1 / (1 + exp(-log-odds))
+
+    It compares the feature value, as float64, with a float64 threshold; a missing
+    value (NaN) goes the way stored with the node. This code does the same.
+
+    `value` of an internal node is not used for prediction. It is filled in here as
+    the training-count-weighted mean of its children, so that a walk from the root
+    to a leaf splits the leaf's value into one change per split - the same exact
+    accounting explain.py uses for the forest.
+    """
+
+    def __init__(self, feature, threshold, missing_left, left, right, value, roots,
+                 baseline: float, max_depth: int):
+        self.feature, self.threshold, self.missing_left = feature, threshold, missing_left
+        self.left, self.right, self.value = left, right, value
+        self.roots, self.baseline, self.max_depth = roots, float(baseline), int(max_depth)
+        self.n_rounds = len(roots)
+
+    @classmethod
+    def from_sklearn(cls, model) -> "CompactBooster":
+        if getattr(model, "n_trees_per_iteration_", 1) != 1:
+            raise ValueError("only binary classifiers are supported")
+        parts = {k: [] for k in ("feature", "threshold", "missing_left", "left", "right", "value")}
+        roots, offset, depth = [], 0, 0
+        for (predictor,) in model._predictors:
+            nodes = predictor.nodes
+            if nodes["is_categorical"].any():
+                raise ValueError("categorical splits are not supported")
+            n = len(nodes)
+            idx = np.arange(n, dtype=np.int64)
+            leaf = nodes["is_leaf"].astype(bool)
+            value = nodes["value"].astype(np.float64).copy()
+            count = nodes["count"].astype(np.float64)
+            for i in range(n - 1, -1, -1):          # children always come after their parent
+                if not leaf[i]:
+                    a, b = nodes["left"][i], nodes["right"][i]
+                    value[i] = (count[a] * value[a] + count[b] * value[b]) / (count[a] + count[b])
+            parts["feature"].append(np.where(leaf, 0, nodes["feature_idx"]).astype(np.int16))
+            parts["threshold"].append(nodes["num_threshold"].astype(np.float64))
+            parts["missing_left"].append(nodes["missing_go_to_left"].astype(bool))
+            parts["left"].append((np.where(leaf, idx, nodes["left"]) + offset).astype(np.int32))
+            parts["right"].append((np.where(leaf, idx, nodes["right"]) + offset).astype(np.int32))
+            parts["value"].append(value)
+            roots.append(offset)
+            offset += n
+            depth = max(depth, int(nodes["depth"].max()))
+        arrays = {k: np.concatenate(v) for k, v in parts.items()}
+        return cls(roots=np.asarray(roots, dtype=np.int32), max_depth=depth,
+                   baseline=float(np.ravel(model._baseline_prediction)[0]), **arrays)
+
+    def go_left(self, x, node):
+        """Which way a value goes at a node (works on scalars and arrays)."""
+        return np.where(np.isnan(x), self.missing_left[node], x <= self.threshold[node])
+
+    def raw(self, X: np.ndarray) -> np.ndarray:
+        """Log-odds for each row."""
+        X = np.asarray(X, dtype=np.float32).astype(np.float64)   # as the model was trained
+        if not len(X):
+            return np.empty(0)
+        rows = np.arange(len(X))[:, None]
+        node = np.broadcast_to(self.roots, (len(X), self.n_rounds)).copy()
+        for _ in range(self.max_depth):
+            left = self.go_left(X[rows, self.feature[node]], node)
+            node = np.where(left, self.left[node], self.right[node])
+        return self.baseline + self.value[node].sum(axis=1)
+
+    def predict_proba(self, X: np.ndarray) -> np.ndarray:
+        p = 1.0 / (1.0 + np.exp(-self.raw(X)))
+        return np.column_stack([1.0 - p, p])
+
+
 def export(full_path: Path = FULL_PATH, out_path: Path = COMPACT_PATH) -> Path:
     """Write the compact file for the model bundle saved by train.py."""
     import joblib  # only needed here, not when serving
 
     bundle = joblib.load(full_path)
     forest = CompactForest.from_sklearn(bundle["model"])
+    booster = CompactBooster.from_sklearn(bundle["booster"]) if bundle.get("booster") is not None else None
     learned = bundle["learned"]
     meta = {
         "feature_names": list(bundle["feature_names"]),
@@ -116,10 +199,15 @@ def export(full_path: Path = FULL_PATH, out_path: Path = COMPACT_PATH) -> Path:
                     "tld_smoothing": learned.tld_smoothing, "prior": float(learned.prior),
                     "tld_rate": {str(k): float(v) for k, v in learned.tld_rate.items()}},
     }
+    extra = {}
+    if booster is not None:
+        meta["booster"] = {"baseline": booster.baseline, "max_depth": booster.max_depth}
+        extra = {f"b_{k}": getattr(booster, k) for k in
+                 ("feature", "threshold", "missing_left", "left", "right", "value", "roots")}
     np.savez_compressed(out_path, feature=forest.feature, threshold=forest.threshold,
                         left=forest.left, right=forest.right, share=forest.share,
                         roots=forest.roots, w_host=learned.w_host, w_url=learned.w_url,
-                        meta=np.array(json.dumps(meta)))
+                        meta=np.array(json.dumps(meta)), **extra)
     return out_path
 
 
@@ -135,8 +223,14 @@ def load(path: Path = COMPACT_PATH) -> dict:
         learned = LearnedFeatures(alpha=cfg["alpha"], hash_bits=cfg["hash_bits"],
                                   tld_smoothing=cfg["tld_smoothing"])
         learned.w_host, learned.w_url = z["w_host"], z["w_url"]
+        booster = None
+        if "booster" in meta:
+            b = meta["booster"]
+            booster = CompactBooster(*(z[f"b_{k}"] for k in ("feature", "threshold", "missing_left",
+                                                             "left", "right", "value", "roots")),
+                                     baseline=b["baseline"], max_depth=b["max_depth"])
     learned.tld_rate, learned.prior = cfg["tld_rate"], cfg["prior"]
-    return {"model": forest, "learned": learned, "feature_names": meta["feature_names"],
+    return {"model": forest, "booster": booster, "learned": learned, "feature_names": meta["feature_names"],
             "thresholds": meta["thresholds"], "trained_at": meta["trained_at"],
             "sklearn_version": meta["sklearn_version"], "source_sha256": meta["source_sha256"]}
 

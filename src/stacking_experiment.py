@@ -114,7 +114,7 @@ def main() -> int:
 
     # sanity: the rebuilt validation rows give exactly the saved model's scores
     p_check = clf.model.predict_proba(X[is_val][:2000])[:, 1]
-    p_saved = clf.score(list(urls[is_val][:2000]))
+    p_saved = clf.score_parts(clf.featurise(list(urls[is_val][:2000])))["forest"]
     assert np.allclose(p_check, p_saved), "features differ from the saved model's"
 
     # validation split in two halves by site: A tunes, B reports

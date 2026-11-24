@@ -49,10 +49,22 @@ class ExplainTest(unittest.TestCase):
         names = [c["name"] for c in result["contributions"]]
         self.assertEqual(sorted(names), sorted(self.clf.feature_names))
 
-    def test_tree_votes_average_to_the_score(self):
+    def test_tree_votes_average_to_the_forest_half(self):
         result = self.explainer.explain(URLS[0])
         self.assertEqual(len(result["tree_votes"]), self.clf.n_trees)
-        self.assertAlmostEqual(float(np.mean(result["tree_votes"])), result["score"], places=3)
+        self.assertAlmostEqual(float(np.mean(result["tree_votes"])), result["halves"]["forest"], places=3)
+
+    def test_halves_are_each_models_score_and_average_to_the_score(self):
+        for url in URLS:
+            result = self.explainer.explain(url)
+            halves = result["halves"]
+            parts = self.clf.score_parts(self.clf.featurise([url]))
+            self.assertAlmostEqual(halves["forest"], float(parts["forest"][0]), places=9, msg=url)
+            self.assertAlmostEqual(halves["booster"], float(parts["booster"][0]), places=9, msg=url)
+            self.assertAlmostEqual((halves["forest"] + halves["booster"]) / 2, result["score"], places=12)
+            self.assertEqual(halves["rounds"], self.clf.n_rounds)
+            self.assertAlmostEqual((halves["forest_baseline"] + halves["booster_baseline"]) / 2,
+                                   result["baseline"], places=12)
 
     def test_character_heat_adds_up_to_the_pattern_score(self):
         for url in URLS:

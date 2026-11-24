@@ -151,9 +151,12 @@ def fig_comparison(m: dict) -> None:
 
 def fig_curves(m: dict) -> None:
     comp = m["comparison"]
-    series = [("Random forest, all 56 features (final)", "Random forest (final)", BLUE),
+    final = next(k for k in comp if "final" in k)
+    series = [(final, "Forest + boosting (final)", BLUE),
+              ("Random forest, all 56 features", "Random forest alone", GRAY),
               ("Logistic regression", "Logistic regression", ORANGE),
               ("Single decision tree", "Single decision tree", AQUA)]
+    series = [x for x in series if x[0] in comp]
     fig, axes = plt.subplots(1, 2, figsize=(10.5, 4.2))
     for key, label, color in series:
         c = comp[key]["curves"]
@@ -216,6 +219,27 @@ def fig_trees(m: dict) -> None:
     ax.annotate(f"{yv[0]:.4f}", (x[0], yv[0]), textcoords="offset points", xytext=(12, -3), ha="left",
                 color=INK2, fontsize=9)
     save(fig, "trees_vs_performance.png")
+
+
+def fig_booster(m: dict) -> None:
+    b = m.get("booster")
+    if not b:
+        return
+    c = b["curve"]
+    x = [r["rounds"] for r in c]
+    forest = b["validation_pr_auc"]["forest"]
+    fig, ax = plt.subplots(figsize=(7.2, 3.6))
+    ax.plot(x, [r["val_pr_auc_average"] for r in c], color=BLUE, lw=2, label="Forest + booster average")
+    ax.plot(x, [r["val_pr_auc_booster"] for r in c], color=ORANGE, lw=2, label="Booster alone")
+    ax.axhline(forest, color=GRAY, lw=2, ls="--", label=f"Forest alone ({forest:.4f})")
+    ax.axvline(b["rounds"], color=INK2, lw=1)
+    ax.annotate(f"kept: {b['rounds']} rounds", (b["rounds"], ax.get_ylim()[0]), textcoords="offset points",
+                xytext=(-6, 8), ha="right", color=INK2, fontsize=9)
+    ax.yaxis.grid(True); ax.set_axisbelow(True)
+    ax.set(xlabel="Boosting rounds", ylabel="Validation PR-AUC",
+           title="Averaging the forest with a gradient-boosted model")
+    ax.legend(loc="lower center", fontsize=9)
+    save(fig, "booster_rounds.png")
 
 
 def fig_detection(m: dict) -> None:
@@ -282,6 +306,7 @@ def main() -> int:
     fig_confusion(metrics)
     fig_importance(metrics)
     fig_trees(metrics)
+    fig_booster(metrics)
     fig_detection(metrics)
     return 0
 

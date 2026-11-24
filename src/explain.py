@@ -2,13 +2,20 @@
 
 Used by serve.py for the demo page. Three things are computed for a URL:
 
-    contributions   how far each feature moved the score. Follow the URL down every
-                    tree; each split changes the share of malicious training URLs
-                    in the current node, and that change is credited to the feature
-                    the split tested. Summed over the forest:
+    contributions   how far each feature moved the score. The score is the mean of
+                    two tree models' probabilities (train.py):
+                    forest   follow the URL down every tree; each split changes
+                             the share of malicious training URLs in the current
+                             node, and that change is credited to the feature the
+                             split tested (Saabas' method).
+                    booster  the same walk through every boosting round, in
+                             log-odds: each split changes the node's value. The
+                             log-odds changes are then rescaled by one factor so
+                             they add up to the booster's change in probability.
+                    Averaged, with no approximation (tests/test_explain.py checks):
                         score = baseline + sum(contributions)
-                    with no approximation (tests/test_explain.py checks this).
-    tree_votes      each tree's own answer, so the page can show the vote.
+    tree_votes      each forest tree's own answer, so the page can show the vote.
+    halves          the forest's and the booster's probabilities, whose mean is the score.
     character heat  the URL n-gram score split back onto the characters that
                     produced it, to show which stretches look malicious.
 
@@ -38,6 +45,10 @@ _JUNK_CHARS = re.compile(r"[\s\x00-\x1f\x7f]")
 _MIN_LENGTH = 4
 _URL_NGRAMS = (3, 5)                 # must match learned_features.LearnedFeatures._vectorise
 _HEAT_FULL_SCALE = 5.0               # a full-height bar, in standard deviations of the n-gram weights
+
+
+def _sigmoid(z: float) -> float:
+    return float(1.0 / (1.0 + np.exp(-z)))
 
 
 def _ngram_count(length: int) -> int:
@@ -118,7 +129,17 @@ class Explainer:
         # model already is one; a scikit-learn forest is converted once.
         model = clf.model
         self._forest = model if isinstance(model, CompactForest) else CompactForest.from_sklearn(model)
-        self.baseline = float(np.mean(self._forest.share[self._forest.roots]))
+        self.forest_baseline = float(np.mean(self._forest.share[self._forest.roots]))
+        # the booster (UrlClassifier keeps it as a CompactBooster) starts every URL at
+        # its baseline log-odds plus each round's root value
+        self._booster = getattr(clf, "booster", None)
+        if self._booster is not None:
+            b = self._booster
+            self._booster_start = b.baseline + float(b.value[b.roots].sum())
+            self.booster_baseline = _sigmoid(self._booster_start)
+            self.baseline = (self.forest_baseline + self.booster_baseline) / 2
+        else:
+            self.baseline = self.forest_baseline
         weights = getattr(clf.learned, "w_url", None)
         self._heat_scale = _HEAT_FULL_SCALE * float(np.std(weights)) if weights is not None else 0.0
 
@@ -137,6 +158,19 @@ class Explainer:
             votes[i] = share[node]
         return moved / f.n_estimators, votes
 
+    def _walk_booster(self, x: np.ndarray) -> tuple[np.ndarray, float]:
+        """Log-odds moved by each feature over all boosting rounds, and the log-odds."""
+        b = self._booster
+        x = np.asarray(x, dtype=np.float32).astype(np.float64)   # as CompactBooster.raw
+        moved = np.zeros(len(x))
+        node = b.roots.astype(np.int64)
+        for _ in range(b.max_depth):          # all rounds step down together
+            feat = b.feature[node]
+            child = np.where(b.go_left(x[feat], node), b.left[node], b.right[node])
+            np.add.at(moved, feat, b.value[child] - b.value[node])   # 0 once at a leaf
+            node = child
+        return moved, self._booster_start + float(moved.sum())
+
     def explain(self, url: str) -> dict:
         url = str(url).strip()
         if not url:
@@ -153,7 +187,22 @@ class Explainer:
 
         x = self.clf.featurise([url])[0]
         moved, votes = self._walk(x)
-        score = float(votes.mean())
+        forest_score = float(votes.mean())
+        score, halves = forest_score, None
+        if self._booster is not None:
+            log_moved, log_odds = self._walk_booster(x)
+            booster_score = _sigmoid(log_odds)
+            change = log_odds - self._booster_start
+            # one factor turns the log-odds changes into probability changes that add up
+            # exactly to booster_score - booster_baseline
+            factor = ((booster_score - self.booster_baseline) / change if abs(change) > 1e-12
+                      else self.booster_baseline * (1 - self.booster_baseline))
+            moved = (moved + factor * log_moved) / 2
+            score = (forest_score + booster_score) / 2
+            halves = {"forest": forest_score, "booster": booster_score,
+                      "forest_baseline": self.forest_baseline,
+                      "booster_baseline": self.booster_baseline,
+                      "trees": int(self._forest.n_estimators), "rounds": int(self._booster.n_rounds)}
 
         contributions = [
             {"name": name, "value": round(float(v), 6), "contribution": round(float(c), 6)}
@@ -186,6 +235,7 @@ class Explainer:
             "verdicts": {m["id"]: "malicious" if score >= m["threshold"] else "benign"
                          for m in self.modes},
             "tree_votes": [round(float(v), 4) for v in votes],
+            "halves": halves,
             "contributions": contributions,
             "heat": heat,
         }

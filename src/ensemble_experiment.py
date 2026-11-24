@@ -112,7 +112,8 @@ def main() -> int:
     X = np.hstack([X_base, L])
     del X_base, L
     Xtr, ytr, Xva, yva = X[is_train], y[is_train], X[is_val], y[is_val]
-    assert np.allclose(clf.model.predict_proba(Xva[:2000])[:, 1], clf.score(list(urls[is_val][:2000])))
+    assert np.allclose(clf.model.predict_proba(Xva[:2000])[:, 1],
+                       clf.score_parts(clf.featurise(list(urls[is_val][:2000])))["forest"])
     B = np.array([zlib.crc32(d.encode()) & 1 for d in domains[is_val]], dtype=bool)
     A = ~B
 

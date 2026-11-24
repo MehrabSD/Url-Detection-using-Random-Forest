@@ -41,6 +41,24 @@ export function splitTable({ caption, rows, scale, head = 'Feature' }) {
       el('td', { class: 'value', text: r.display })))));
 }
 
+// The two halves of the score and their average, against the chosen cut-off.
+export function halvesChart({ halves, score, mode }) {
+  const pos = (v) => `${(Math.max(0, Math.min(1, v)) * 100).toFixed(2)}%`;
+  const flagged = score >= mode.threshold;
+  const row = ({ name, note, value, total }) => el('div', { class: total ? 'half-row total' : 'half-row' },
+    el('span', { class: 'half-label' }, el('b', { text: name }), el('small', { text: note })),
+    el('span', { class: 'meter', role: 'img', 'aria-label': `${name}: ${fmt.score(value)}` },
+      el('span', { class: 'meter-track' }),
+      el('span', { class: 'meter-cut', style: { left: pos(mode.threshold) } }),
+      el('span', { class: `meter-dot ${total ? (flagged ? 'flagged' : 'passes') : 'part'}`, style: { left: pos(value) } })),
+    el('span', { class: `meter-value${total ? (flagged ? ' flagged' : ' passes') : ''}`, text: fmt.score(value) }));
+  return el('div', { class: 'halves' },
+    row({ name: 'Random forest', note: `${halves.trees} trees vote`, value: halves.forest }),
+    row({ name: 'Gradient boosting', note: `${halves.rounds} trees in sequence`, value: halves.booster }),
+    row({ name: 'Score', note: 'the average of the two', value: score, total: true }),
+    el('p', { class: 'half-cut', text: `The line marks the ${mode.label} cut-off, ${fmt.score(mode.threshold)}. Only the average is compared with it.` }));
+}
+
 // Each tree's own answer for this URL, with the decision cut-offs and the average.
 export function voteChart({ votes, modes, chosen, score }) {
   const BINS = 25;

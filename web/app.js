@@ -7,7 +7,7 @@
 // missing from a report are left out with a note.
 
 import { $, el, fill, fmt, getJSON, startTips } from './util.js';
-import { barTable, splitTable, voteChart, tradeoffChart } from './charts.js';
+import { barTable, splitTable, voteChart, halvesChart, tradeoffChart } from './charts.js';
 import { renderLab, renderRobustness } from './lab.js';
 import { setupInbox, renderInbox } from './inbox.js';
 import { setupQr } from './qr.js';
@@ -115,7 +115,7 @@ function renderSpecimen(result, reveal) {
     notes.push(
       el('i', { class: 'key malicious' }), 'Bars rise where a stretch of characters resembles malicious URLs from training. ',
       el('i', { class: 'key benign' }), 'They dip where it resembles safe ones. ',
-      top ? `This is the model's strongest single input; the forest weighs it with ${view.info.model.features - 1} others.`
+      top ? `This is the model's strongest single input; the model weighs it with ${view.info.model.features - 1} others.`
           : `This is one of the model's ${view.info.model.features} inputs.`);
   }
   if (result.normalized !== result.input) {
@@ -194,10 +194,22 @@ function renderVerdict(result) {
 function renderVotes(result) {
   const votes = result.tree_votes;
   const leaning = votes.filter((v) => v >= 0.5).length;
-  $('votes-title').textContent = `How the ${votes.length} trees voted`;
+  const halves = result.halves;
+  if (!halves) {   // a model saved before the booster was added
+    $('votes-title').textContent = `How the ${votes.length} trees voted`;
+    return fill($('votes'),
+      el('p', { class: 'explain', text: `${leaning} of ${votes.length} trees lean malicious for this URL. The score is the average of all of them.` }),
+      voteChart({ votes, modes: view.info.modes, chosen: view.mode, score: result.score }));
+  }
+  $('votes-title').textContent = 'Two models, one score';
   fill($('votes'),
-    el('p', { class: 'explain', text: `${leaning} of ${votes.length} trees lean malicious for this URL. The score is the average of all of them.` }),
-    voteChart({ votes, modes: view.info.modes, chosen: view.mode, score: result.score }));
+    el('p', { class: 'explain', text:
+      'A random forest and a gradient-boosted model each give a probability, and the score is their average. '
+      + `The forest's ${halves.trees} trees are grown independently and vote; the booster's ${halves.rounds} small trees are grown one after another, each correcting the ones before it.` }),
+    halvesChart({ halves, score: result.score, mode: view.mode }),
+    el('h3', { class: 'minor votes-sub', text: `How the forest's ${votes.length} trees voted` }),
+    el('p', { class: 'explain', text: `${leaning} of ${votes.length} lean malicious for this URL. The forest's half of the score is their average.` }),
+    voteChart({ votes, modes: [], chosen: view.mode, score: halves.forest }));
 }
 
 function renderMoves(result) {
@@ -218,9 +230,11 @@ function renderMoves(result) {
     const sum = rest.reduce((total, c) => total + c.contribution, 0);
     rows.push({ label: `The other ${rest.length} features together`, amount: sum, display: fmt.signed(sum), summary: true });
   }
-  $('why-intro').textContent =
-    `Every URL starts at ${fmt.score(result.baseline)}, the average share of malicious URLs the trees were trained on. `
-    + `Each feature then moves the score up or down, and the ${all.length} changes add up to exactly ${fmt.score(result.score)}.`;
+  $('why-intro').textContent = result.halves
+    ? `Every URL starts at ${fmt.score(result.baseline)}, the two models' average starting point before they read anything. `
+      + `Each feature then moves the score up or down through the splits of both models, and the ${all.length} changes add up to exactly ${fmt.score(result.score)}.`
+    : `Every URL starts at ${fmt.score(result.baseline)}, the average share of malicious URLs the trees were trained on. `
+      + `Each feature then moves the score up or down, and the ${all.length} changes add up to exactly ${fmt.score(result.score)}.`;
   fill($('why'),
     splitTable({ caption: 'How much each feature moved the score for this URL', rows, scale }),
     all.length > TOP_MOVES && showAll(view.allMoves, all.length, 'features',
@@ -455,7 +469,9 @@ function renderFeatures() {
 
 function renderFrame() {
   const { model, examples } = view.info;
-  $('facts').textContent = `${model.trees} trees, ${model.features} features`;
+  $('facts').textContent = model.boosting_rounds
+    ? `${model.trees}-tree forest + ${model.boosting_rounds}-round booster, ${model.features} features`
+    : `${model.trees} trees, ${model.features} features`;
 
   fill($('examples'), 'Try one: ',
     examples.map((x) => el('button', { class: 'link', type: 'button', text: x.label, onclick: () => load(x.url) })));

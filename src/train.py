@@ -1,4 +1,5 @@
-"""Train and evaluate the malicious-URL random forest.
+"""Train and evaluate the malicious-URL model: a random forest averaged with a
+gradient-boosted model.
 
     python src/train.py
 
@@ -13,7 +14,9 @@ TECHNICAL_DOCUMENTATION.md:
     2. cross        Does a model trained on one dataset work on another?
     3. learned      Build the three learned features (out-of-fold).
     4. search       Pick random-forest hyper-parameters on the validation sites.
-    5. final        Fit the final forest, choose the decision threshold.
+    5. final        Fit the final forest and the gradient-boosted model, pick the
+                    number of boosting rounds and the decision thresholds for
+                    their average on the validation sites.
     6. test         Score once on the held-out test sites + baselines + importances.
 """
 from __future__ import annotations
@@ -31,8 +34,7 @@ import numpy as np
 import pandas as pd
 import sklearn
 from sklearn.dummy import DummyClassifier
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.inspection import permutation_importance
+from sklearn.ensemble import HistGradientBoostingClassifier, RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (average_precision_score, confusion_matrix, precision_recall_curve,
                              roc_auc_score, roc_curve)
@@ -77,6 +79,13 @@ SEARCH_TOLERANCE = 0.002   # prefer the smallest forest within this PR-AUC of th
 FINAL_TREES = 200
 LOW_FPR_TARGET = 0.01
 
+# The gradient-boosted half (step 5). scikit-learn's histogram boosting, the
+# LightGBM algorithm. Settings from the stacking experiment (stacking_experiment.py,
+# section 9.8 of the docs); the number of rounds is chosen on the validation sites.
+BOOSTER = dict(learning_rate=0.1, max_iter=600, max_leaf_nodes=63, min_samples_leaf=50,
+               l2_regularization=1.0, early_stopping=False, random_state=SEED)
+BOOSTER_CHECK_EVERY = 25
+
 
 def log(msg: str) -> None:
     print(f"[{time.strftime('%H:%M:%S')}] {msg}", flush=True)
@@ -116,6 +125,22 @@ def curve_points(y, p, n: int = 150) -> dict:
             "recall": rec[j].round(5).tolist(), "precision": prec[j].round(5).tolist()}
 
 
+def permutation_ap(score, X, y, repeats: int, seed: int) -> list[tuple[float, float]]:
+    """Fall in PR-AUC when one column is shuffled, per feature: (mean, std) over repeats.
+    Works for any scoring function, here the forest + booster average."""
+    rng = np.random.default_rng(seed)
+    base = average_precision_score(y, score(X))
+    out = []
+    for j in range(X.shape[1]):
+        drops = []
+        for _ in range(repeats):
+            Xp = X.copy()
+            Xp[:, j] = rng.permutation(Xp[:, j])
+            drops.append(base - average_precision_score(y, score(Xp)))
+        out.append((float(np.mean(drops)), float(np.std(drops))))
+    return out
+
+
 def forest_size(model: RandomForestClassifier) -> dict:
     return {"nodes_per_tree": int(np.mean([e.tree_.node_count for e in model.estimators_])),
             "mean_depth": float(np.mean([e.tree_.max_depth for e in model.estimators_]))}
@@ -133,8 +158,10 @@ def step_leakage(df: pd.DataFrame, X: np.ndarray) -> dict:
     tr, te = train_test_split(idx, test_size=0.2, stratify=yk, random_state=SEED)
     m = rf(**QUICK_RF).fit(Xk[tr], yk[tr])
     out["random_split"] = metrics_at(yk[te], m.predict_proba(Xk[te])[:, 1])
+    # a set lookup: np.isin on object (string) arrays falls back to an O(n*m) loop
+    train_sites = set(domain[tr])
     out["random_split"]["test_urls_whose_site_is_in_train"] = float(
-        np.isin(domain[te], np.unique(domain[tr])).mean())
+        np.mean([d in train_sites for d in domain[te]]))
 
     te = np.isin(bucket, TEST_BUCKETS)
     m = rf(**QUICK_RF).fit(Xk[~te], yk[~te])
@@ -167,6 +194,7 @@ def main() -> int:
     report: dict = {"config": {
         "seed": SEED, "sklearn": sklearn.__version__, "test_buckets": TEST_BUCKETS,
         "val_buckets": VAL_BUCKETS, "quick_rf": QUICK_RF, "final_trees": FINAL_TREES,
+        "booster": BOOSTER,
     }}
 
     log("loading dataset")
@@ -229,11 +257,42 @@ def main() -> int:
     log(f"    chosen: {best_params}")
 
     # -------------------------------------------------------------- step 5
-    log(f"step 5/6  final forest ({FINAL_TREES} trees)")
+    log(f"step 5/6  final forest ({FINAL_TREES} trees) + gradient boosting")
     t0 = time.time()
     model = rf(n_estimators=FINAL_TREES, **best_params).fit(Xtr, ytr)
     fit_seconds = time.time() - t0
-    p_val = model.predict_proba(Xva)[:, 1]
+    p_forest_val = model.predict_proba(Xva)[:, 1]
+
+    # the booster: fit the maximum number of rounds once, then pick how many to keep
+    # by the validation PR-AUC of the average with the forest (the model we ship)
+    t0 = time.time()
+    staged, booster_curve = {}, []
+    for i, p in enumerate(HistGradientBoostingClassifier(**BOOSTER).fit(Xtr, ytr)
+                          .staged_predict_proba(Xva), start=1):
+        if i % BOOSTER_CHECK_EVERY == 0:
+            staged[i] = p[:, 1]
+            booster_curve.append({
+                "rounds": i,
+                "val_pr_auc_booster": float(average_precision_score(yva, p[:, 1])),
+                "val_pr_auc_average": float(average_precision_score(yva, (p[:, 1] + p_forest_val) / 2))})
+    rounds = max(booster_curve, key=lambda c: c["val_pr_auc_average"])["rounds"]
+    # refit with exactly that many rounds; with no early stopping or sampling the fit
+    # is deterministic, so it equals the first `rounds` rounds of the long fit
+    booster = HistGradientBoostingClassifier(**{**BOOSTER, "max_iter": rounds}).fit(Xtr, ytr)
+    p_booster_val = booster.predict_proba(Xva)[:, 1]
+    assert np.allclose(p_booster_val, staged[rounds]), "refit differs from the staged model"
+    booster_seconds = time.time() - t0
+    p_val = (p_forest_val + p_booster_val) / 2
+    report["booster"] = {
+        "params": {k: v for k, v in BOOSTER.items() if k != "random_state"},
+        "rounds": rounds, "check_every": BOOSTER_CHECK_EVERY, "curve": booster_curve,
+        "fit_seconds_with_selection": round(booster_seconds, 1),
+        "validation_pr_auc": {"forest": float(average_precision_score(yva, p_forest_val)),
+                              "booster": float(average_precision_score(yva, p_booster_val)),
+                              "average": float(average_precision_score(yva, p_val))},
+    }
+    log("    booster: {} rounds; validation PR-AUC forest {forest:.4f}  booster {booster:.4f}  "
+        "average {average:.4f}".format(rounds, **report["booster"]["validation_pr_auc"]))
 
     # how many trees are actually needed?
     running, curve = np.zeros(len(yva)), []
@@ -259,7 +318,9 @@ def main() -> int:
 
     # -------------------------------------------------------------- step 6
     log("step 6/6  held-out test sites")
-    p_test = model.predict_proba(Xte)[:, 1]
+    p_forest_test = model.predict_proba(Xte)[:, 1]
+    p_booster_test = booster.predict_proba(Xte)[:, 1]
+    p_test = (p_forest_test + p_booster_test) / 2
     test_meta = meta[is_test].reset_index(drop=True)
     test = {name: metrics_at(yte, p_test, t) for name, t in
             (("default", 0.5), ("max_f1", thr_f1), ("low_fpr", thr_low_fpr))}
@@ -306,26 +367,30 @@ def main() -> int:
     nb = len(F.FEATURE_NAMES)
     rf_base = rf(n_estimators=FINAL_TREES, **best_params).fit(Xtr[:, :nb], ytr)
     add("Random forest, 53 hand-made features", rf_base.predict_proba(Xte[:, :nb])[:, 1])
-    add("Random forest, all 56 features (final)", p_test)
+    add("Random forest, all 56 features", p_forest_test)
+    add("Gradient boosting, all 56 features", p_booster_test)
+    add("Forest + gradient boosting average (final)", p_test)
     report["comparison"] = comparison
     del rf_base, tree, lr
 
-    # feature importance: impurity-based (from training) and permutation (on test sites)
+    # feature importance: impurity-based (inside the forest, from training) and
+    # permutation (of the final average, on test sites)
     log("    feature importances")
     rng = np.random.default_rng(SEED)
     sample = rng.choice(len(yte), size=min(20_000, len(yte)), replace=False)
-    perm = permutation_importance(model, Xte[sample], yte[sample], scoring="average_precision",
-                                  n_repeats=3, random_state=SEED, n_jobs=1)
+    perm = permutation_ap(lambda Z: (model.predict_proba(Z)[:, 1] + booster.predict_proba(Z)[:, 1]) / 2,
+                          Xte[sample], yte[sample], repeats=3, seed=SEED)
     report["feature_importance"] = sorted(
-        ({"feature": f, "impurity": float(i), "permutation": float(pm), "permutation_std": float(ps)}
-         for f, i, pm, ps in zip(feature_names, model.feature_importances_,
-                                 perm.importances_mean, perm.importances_std)),
+        ({"feature": f, "impurity": float(i), "permutation": pm, "permutation_std": ps}
+         for f, i, (pm, ps) in zip(feature_names, model.feature_importances_, perm)),
         key=lambda r: -r["permutation"])
 
     # ---------------------------------------------------------------- save
     MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
     bundle = {
         "model": model,
+        "booster": booster,
+        "blend": "mean of the forest's and the booster's probabilities",
         "learned": learned,
         "feature_names": feature_names,
         "thresholds": report["thresholds"],
@@ -333,7 +398,7 @@ def main() -> int:
         "sklearn_version": sklearn.__version__,
     }
     joblib.dump(bundle, MODEL_PATH, compress=3)
-    # the same forest as flat arrays, for serving in little memory (compact_forest.py)
+    # the same model as flat arrays, for serving in little memory (compact_forest.py)
     import compact_forest
     compact_forest.export(MODEL_PATH)
 
@@ -341,7 +406,7 @@ def main() -> int:
     t0 = time.time()
     some = test_meta["url"].head(10_000).tolist()
     Xs = np.hstack([F.extract_many(some, n_jobs=1), learned.transform(some)])
-    model.predict_proba(Xs)
+    (model.predict_proba(Xs)[:, 1] + booster.predict_proba(Xs)[:, 1]) / 2
     per_url_ms = (time.time() - t0) / len(some) * 1000
 
     report["model"] = {
@@ -351,6 +416,11 @@ def main() -> int:
         "file_mb": round(MODEL_PATH.stat().st_size / 1e6, 1),
         "batch_ms_per_url": round(per_url_ms, 4),
         **forest_size(model),
+        "booster": {"rounds": rounds, "max_leaf_nodes": BOOSTER["max_leaf_nodes"],
+                    "learning_rate": BOOSTER["learning_rate"],
+                    "leaves_per_round": float(np.mean([pr[0].get_n_leaf_nodes() for pr in booster._predictors])),
+                    "max_depth": int(max(pr[0].get_max_depth() for pr in booster._predictors))},
+        "blend": "mean of the two probabilities",
     }
     report["total_minutes"] = round((time.time() - t_start) / 60, 1)
     REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)

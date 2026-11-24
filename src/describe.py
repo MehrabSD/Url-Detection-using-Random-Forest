@@ -131,7 +131,7 @@ _MODE_TEXT = {
 EXAMPLES = [
     {"label": "Lookalike sign-in", "url": "http://paypal.com.secure-login-verify.xyz/webscr?cmd=_login"},
     {"label": "Malware download", "url": "http://194.48.152.10/bins/x86.sh"},
-    {"label": "Prize scam", "url": "http://free-gift-card-winner.tk/claim.php"},
+    {"label": "Prize scam the two models disagree on", "url": "http://free-gift-card-winner.tk/claim.php"},
     {"label": "Ordinary page", "url": "github.com/scikit-learn/scikit-learn"},
     {"label": "A real sign-in page it gets wrong", "url": "https://accounts.google.com/signin/v2/identifier"},
 ]

@@ -1,5 +1,6 @@
 """The compact model (src/compact_forest.py) must behave exactly like the forest
-train.py saved: same scores, same explanations. The demo is served from it.
+and the gradient-boosted model train.py saved: same scores, same explanations. The
+demo is served from it.
 
     .venv\\Scripts\\python.exe -m unittest discover -s tests -v
 
@@ -60,6 +61,21 @@ class CompactTest(unittest.TestCase):
         self.assertGreater(len(self.urls), 200)
         np.testing.assert_allclose(got, expected, rtol=0, atol=1e-12)
 
+    def test_booster_matches_scikit_learn(self):
+        import joblib
+        booster = joblib.load(MODEL_PATH)["booster"]     # the scikit-learn object
+        X = self.full.featurise(self.urls)
+        np.testing.assert_allclose(self.small.booster.predict_proba(X), booster.predict_proba(X),
+                                   rtol=0, atol=1e-12)
+        self.assertEqual(self.small.n_rounds, booster.n_iter_)
+
+    def test_score_is_the_mean_of_the_two_halves(self):
+        X = self.small.featurise(self.urls)
+        parts = self.small.score_parts(X)
+        self.assertEqual(set(parts), {"forest", "booster"})
+        np.testing.assert_allclose(self.small.score(self.urls), (parts["forest"] + parts["booster"]) / 2,
+                                   rtol=0, atol=1e-15)
+
     def test_whole_classifier_matches(self):
         np.testing.assert_allclose(self.small.score(self.urls), self.full.score(self.urls), rtol=0, atol=1e-12)
         self.assertEqual(self.small.thresholds, {k: float(v) for k, v in self.full.thresholds.items()})
@@ -74,6 +90,7 @@ class CompactTest(unittest.TestCase):
             self.assertAlmostEqual(ra["score"], rb["score"], places=12)
             self.assertEqual(ra["contributions"], rb["contributions"])
             self.assertEqual(ra["tree_votes"], rb["tree_votes"])
+            self.assertEqual(ra["halves"], rb["halves"])
 
     def test_compact_file_matches_the_trained_model(self):
         meta = compact_forest.load()

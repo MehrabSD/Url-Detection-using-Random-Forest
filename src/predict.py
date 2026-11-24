@@ -23,14 +23,17 @@ import joblib
 import numpy as np
 
 import features as F
+from compact_forest import CompactBooster
 
 MODEL_PATH = Path(__file__).resolve().parent.parent / "models" / "malicious_url_rf.joblib"
 MODES = {"balanced": "max_f1", "strict": "low_fpr", "default": "default"}
 
 
 class UrlClassifier:
-    """The saved model. `path` is the bundle train.py wrote (.joblib, a scikit-learn
-    forest) or its compact export (.npz, see compact_forest.py); both predict alike."""
+    """The saved model: a random forest and a gradient-boosted model, whose
+    probabilities are averaged. `path` is the bundle train.py wrote (.joblib,
+    scikit-learn objects) or its compact export (.npz, see compact_forest.py);
+    both predict alike."""
 
     def __init__(self, path: Path = MODEL_PATH):
         self.path = Path(path)
@@ -41,6 +44,10 @@ class UrlClassifier:
             bundle = joblib.load(self.path)
             bundle["model"].set_params(n_jobs=1, verbose=0)
         self.model = bundle["model"]
+        booster = bundle.get("booster")
+        if booster is not None and not isinstance(booster, CompactBooster):
+            booster = CompactBooster.from_sklearn(booster)   # same predictions, flat arrays
+        self.booster = booster
         self.learned = bundle["learned"]
         self.feature_names = bundle["feature_names"]
         self.thresholds = bundle["thresholds"]
@@ -54,9 +61,25 @@ class UrlClassifier:
         norm = [F.normalize_url(u) for u in urls]
         return np.hstack([F.extract_many(norm, n_jobs=1), self.learned.transform(norm)])
 
+    @property
+    def n_rounds(self) -> int:
+        return self.booster.n_rounds if self.booster is not None else 0
+
+    def score_parts(self, X: np.ndarray) -> dict:
+        """Each half's probability for already-featurised rows."""
+        parts = {"forest": self.model.predict_proba(X)[:, 1]}
+        if self.booster is not None:
+            parts["booster"] = self.booster.predict_proba(X)[:, 1]
+        return parts
+
+    def score_features(self, X: np.ndarray) -> np.ndarray:
+        """The model's score: the mean of the forest's and the booster's probabilities
+        (just the forest's for a bundle saved before the booster was added)."""
+        return np.mean(list(self.score_parts(X).values()), axis=0)
+
     def score(self, urls: list[str]) -> np.ndarray:
         """Probability-like score in [0, 1]; higher = more likely malicious."""
-        return self.model.predict_proba(self.featurise(urls))[:, 1]
+        return self.score_features(self.featurise(urls))
 
     def predict(self, urls: list[str], mode: str = "balanced") -> list[dict]:
         thr = self.thresholds[MODES[mode]]

@@ -119,209 +119,210 @@
       "views_per_url": 1.0,
       "thresholds": {
         "default": 0.5,
-        "max_f1": 0.4198198528822965,
-        "low_fpr": 0.7966146019387413,
+        "max_f1": 0.42197969708513045,
+        "low_fpr": 0.806836956128672,
         "low_fpr_target": 0.01
       },
       "validation": {
         "balanced": {
           "n": 155612,
-          "threshold": 0.4198198528822965,
-          "accuracy": 0.8952265892090584,
-          "precision": 0.8904347210421977,
-          "recall": 0.8326050976497849,
-          "f1": 0.8605494543090766,
-          "false_positive_rate": 0.06502647281284142,
-          "roc_auc": 0.94808013948165,
-          "pr_auc": 0.9388712003482957,
-          "tn": 89002,
-          "fp": 6190,
-          "fn": 10114,
-          "tp": 50306
+          "threshold": 0.42197969708513045,
+          "accuracy": 0.8996735470272216,
+          "precision": 0.8985342251316352,
+          "recall": 0.836014564713671,
+          "f1": 0.8661476731026441,
+          "false_positive_rate": 0.05992100176485419,
+          "roc_auc": 0.9517971355037526,
+          "pr_auc": 0.9434142353178124,
+          "tn": 89488,
+          "fp": 5704,
+          "fn": 9908,
+          "tp": 50512
         },
         "strict": {
           "n": 155612,
-          "threshold": 0.7966146019387413,
-          "accuracy": 0.8592653522864561,
-          "precision": 0.9764732076591955,
-          "recall": 0.6532770605759682,
-          "f1": 0.7828285833283751,
+          "threshold": 0.806836956128672,
+          "accuracy": 0.8681142842454309,
+          "precision": 0.9772482595277399,
+          "recall": 0.6760675273088381,
+          "f1": 0.7992251929680392,
           "false_positive_rate": 0.009990335322295991,
-          "roc_auc": 0.94808013948165,
-          "pr_auc": 0.9388712003482957,
+          "roc_auc": 0.9517971355037526,
+          "pr_auc": 0.9434142353178124,
           "tn": 94241,
           "fp": 951,
-          "fn": 20949,
-          "tp": 39471
+          "fn": 19572,
+          "tp": 40848
         },
         "default": {
           "n": 155612,
           "threshold": 0.5,
-          "accuracy": 0.8959848854844099,
-          "precision": 0.9165316961090814,
-          "recall": 0.8054617676266137,
-          "f1": 0.8574146831339523,
-          "false_positive_rate": 0.04655853433061602,
-          "roc_auc": 0.94808013948165,
-          "pr_auc": 0.9388712003482957,
-          "tn": 90760,
-          "fp": 4432,
-          "fn": 11754,
-          "tp": 48666
+          "accuracy": 0.9007917127213839,
+          "precision": 0.9227790518440543,
+          "recall": 0.8124793114862628,
+          "f1": 0.8641236423806087,
+          "false_positive_rate": 0.0431548869652912,
+          "roc_auc": 0.9517971355037526,
+          "pr_auc": 0.9434142353178124,
+          "tn": 91084,
+          "fp": 4108,
+          "fn": 11330,
+          "tp": 49090
         }
       },
       "external_unseen": {
         "balanced": {
           "n": 5839,
-          "threshold": 0.4198198528822965,
-          "accuracy": 0.8657304332933722,
-          "precision": 0.7633262260127932,
-          "recall": 0.8865775136206042,
-          "f1": 0.8203483043079745,
-          "false_positive_rate": 0.14528795811518325,
-          "roc_auc": 0.9404944908188959,
-          "pr_auc": 0.8955362195693408,
-          "tn": 3265,
-          "fp": 555,
-          "fn": 229,
-          "tp": 1790
+          "threshold": 0.42197969708513045,
+          "accuracy": 0.8694982017468744,
+          "precision": 0.7712559343979284,
+          "recall": 0.8850916295195641,
+          "f1": 0.8242619926199262,
+          "false_positive_rate": 0.1387434554973822,
+          "roc_auc": 0.9421547653314454,
+          "pr_auc": 0.90389339396607,
+          "tn": 3290,
+          "fp": 530,
+          "fn": 232,
+          "tp": 1787
         },
         "strict": {
           "n": 5839,
-          "threshold": 0.7966146019387413,
-          "accuracy": 0.8157218701832506,
-          "precision": 0.9228699551569507,
-          "recall": 0.5096582466567607,
-          "f1": 0.6566687938736439,
-          "false_positive_rate": 0.022513089005235604,
-          "roc_auc": 0.9404944908188959,
-          "pr_auc": 0.8955362195693408,
-          "tn": 3734,
-          "fp": 86,
-          "fn": 990,
-          "tp": 1029
+          "threshold": 0.806836956128672,
+          "accuracy": 0.8352457612604898,
+          "precision": 0.9364161849710982,
+          "recall": 0.5616641901931649,
+          "f1": 0.7021671826625389,
+          "false_positive_rate": 0.020157068062827226,
+          "roc_auc": 0.9421547653314454,
+          "pr_auc": 0.90389339396607,
+          "tn": 3743,
+          "fp": 77,
+          "fn": 885,
+          "tp": 1134
         },
         "default": {
           "n": 5839,
           "threshold": 0.5,
-          "accuracy": 0.8789176228806302,
-          "precision": 0.811787072243346,
-          "recall": 0.8459633481921743,
-          "f1": 0.8285229202037352,
-          "false_positive_rate": 0.10366492146596859,
-          "roc_auc": 0.9404944908188959,
-          "pr_auc": 0.8955362195693408,
-          "tn": 3424,
-          "fp": 396,
-          "fn": 311,
-          "tp": 1708
+          "accuracy": 0.8766912142490152,
+          "precision": 0.8079658605974396,
+          "recall": 0.8439821693907875,
+          "f1": 0.8255813953488372,
+          "false_positive_rate": 0.10602094240837696,
+          "roc_auc": 0.9421547653314454,
+          "pr_auc": 0.90389339396607,
+          "tn": 3415,
+          "fp": 405,
+          "fn": 315,
+          "tp": 1704
         }
       },
       "attack": {
-        "cut_off": 0.4198198528822965,
+        "cut_off": 0.42197969708513045,
         "sample": 400,
-        "caught_before_attack": 352,
+        "caught_before_attack": 356,
         "evaded_within_price": {
-          "1": 0.8210227272727273,
-          "2": 0.9289772727272727,
-          "3": 0.9857954545454546,
-          "4": 0.9971590909090909,
-          "5": 0.9971590909090909,
-          "6": 0.9971590909090909
+          "1": 0.8314606741573034,
+          "2": 0.9662921348314607,
+          "3": 0.9943820224719101,
+          "4": 1.0,
+          "5": 1.0,
+          "6": 1.0
         },
         "attacker_success_within_price": {
-          "0": 0.12,
-          "1": 0.8425,
-          "2": 0.9375,
-          "3": 0.9875,
-          "4": 0.9975,
-          "5": 0.9975,
-          "6": 0.9975
+          "0": 0.11,
+          "1": 0.85,
+          "2": 0.97,
+          "3": 0.995,
+          "4": 1.0,
+          "5": 1.0,
+          "6": 1.0
         },
-        "never_evaded_within_max_price": 0.002840909090909091,
-        "mean_price_when_evaded": 1.2564102564102564,
+        "never_evaded_within_max_price": 0.0,
+        "mean_price_when_evaded": 1.2078651685393258,
         "moves_in_cheapest_paths": {
-          "pad_tracking": 376,
-          "pad_path": 17,
-          "ip_to_name": 13,
-          "trim_path": 5,
-          "pad_path_suffix": 5,
-          "drop_query": 3,
-          "shorten_token": 3,
-          "drop_subdomains": 2
+          "pad_tracking": 379,
+          "ip_to_name": 12,
+          "drop_query": 7,
+          "trim_path": 4,
+          "swap_tld": 4,
+          "pad_path": 3,
+          "pad_path_suffix": 2,
+          "shorten_token": 2,
+          "drop_path_word": 1
         },
         "mean_single_move_change": {
-          "pad_tracking": -0.5228543359273626,
-          "ip_to_name": -0.5204778550366194,
-          "drop_subdomains": -0.28654241885822357,
-          "drop_host_word": -0.19425909925466076,
-          "pad_path": -0.1849275324461598,
-          "pad_path_suffix": -0.17916355640823836,
-          "swap_tld": -0.11786286377223633,
-          "drop_path_word": -0.09811323987516327,
-          "trim_path": -0.060481811870383394,
-          "shorten_token": -0.05711228342527358,
-          "plain_name": -0.03328093543839923,
-          "drop_extension": -0.02372319451385738,
-          "lowercase_path": -0.010792505677095707,
-          "drop_query": 0.03013252615586215,
-          "drop_fragment": 0.10176276446397925
+          "pad_tracking": -0.5955293920679218,
+          "ip_to_name": -0.5247517668897813,
+          "drop_subdomains": -0.28470505827022613,
+          "pad_path": -0.19930470319425,
+          "pad_path_suffix": -0.1900560859656664,
+          "drop_host_word": -0.17529728146222534,
+          "swap_tld": -0.11994375436108934,
+          "drop_path_word": -0.10552427240809005,
+          "shorten_token": -0.0823712213041356,
+          "trim_path": -0.07139593181596299,
+          "plain_name": -0.03430722371651078,
+          "lowercase_path": -0.023836091535700717,
+          "drop_extension": -0.012438545277445626,
+          "drop_query": 0.011521914535498924,
+          "drop_fragment": 0.08187889746925303
         },
         "examples": [
           {
             "url": "vacomsystems.com/wp-content/uploads/2020/07/online/chase/home",
-            "score": 0.9399587814020616,
+            "score": 0.9625184621164111,
             "steps": [
               {
                 "move": "pad_tracking",
                 "label": "Add tracking parameters",
                 "url": "vacomsystems.com/wp-content/uploads/2020/07/online/chase/home?utm_source=newsletter&utm_medium=email&utm_campaign=autumn",
-                "score": 0.16613095238095232,
+                "score": 0.13128804514727865,
                 "price": 1
               }
             ]
           },
           {
             "url": "alphacon.co.id/loggers/kazhank/drpsze/ms.php",
-            "score": 0.922137408908062,
+            "score": 0.9355778250454467,
             "steps": [
               {
                 "move": "pad_tracking",
                 "label": "Add tracking parameters",
                 "url": "alphacon.co.id/loggers/kazhank/drpsze/ms.php?utm_source=newsletter&utm_medium=email&utm_campaign=autumn",
-                "score": 0.17666666666666667,
+                "score": 0.13079400094827975,
                 "price": 1
               }
             ]
           },
           {
             "url": "villahidalgoysugente.com/education/resFolder/",
-            "score": 0.6951508143682881,
+            "score": 0.7638771823617705,
             "steps": [
               {
                 "move": "pad_tracking",
                 "label": "Add tracking parameters",
                 "url": "villahidalgoysugente.com/education/resFolder/?utm_source=partner&utm_medium=referral",
-                "score": 0.12880494718584456,
+                "score": 0.06563662456291958,
                 "price": 1
               }
             ]
           },
           {
             "url": "support10000.mixh.jp/login/account/app/captcha",
-            "score": 0.8758034002347577,
+            "score": 0.9287734839517214,
             "steps": [
               {
                 "move": "pad_tracking",
                 "label": "Add tracking parameters",
                 "url": "support10000.mixh.jp/login/account/app/captcha?utm_source=newsletter&utm_medium=email&utm_campaign=autumn",
-                "score": 0.2136547619047619,
+                "score": 0.14671303494642005,
                 "price": 1
               }
             ]
           }
         ],
-        "seconds": 64.5
+        "seconds": 75.1
       }
     },
     "no_query": {
@@ -329,249 +330,243 @@
       "views_per_url": 1.2102,
       "thresholds": {
         "default": 0.5,
-        "max_f1": 0.43554335314375486,
-        "low_fpr": 0.8181236804303738,
+        "max_f1": 0.4817559926802973,
+        "low_fpr": 0.8264415396502459,
         "low_fpr_target": 0.01
       },
       "validation": {
         "balanced": {
           "n": 155612,
-          "threshold": 0.43554335314375486,
-          "accuracy": 0.8900084826363005,
-          "precision": 0.8784785344707033,
-          "recall": 0.8317775571002979,
-          "f1": 0.8544904274492467,
-          "false_positive_rate": 0.07303134717203126,
-          "roc_auc": 0.9442777814765226,
-          "pr_auc": 0.9343778581442104,
-          "tn": 88240,
-          "fp": 6952,
-          "fn": 10164,
-          "tp": 50256
+          "threshold": 0.4817559926802973,
+          "accuracy": 0.8954836387939233,
+          "precision": 0.8996307424971943,
+          "recall": 0.822591857000993,
+          "f1": 0.8593882385489253,
+          "false_positive_rate": 0.058250693335574415,
+          "roc_auc": 0.9480026182349516,
+          "pr_auc": 0.9390424875051229,
+          "tn": 89647,
+          "fp": 5545,
+          "fn": 10719,
+          "tp": 49701
         },
         "strict": {
           "n": 155612,
-          "threshold": 0.8181236804303738,
-          "accuracy": 0.8532246870421304,
-          "precision": 0.9759854088560138,
-          "recall": 0.6376696458126448,
-          "f1": 0.7713622167053736,
-          "false_positive_rate": 0.009958820068913354,
-          "roc_auc": 0.9442777814765226,
-          "pr_auc": 0.9343778581442104,
-          "tn": 94244,
-          "fp": 948,
-          "fn": 21892,
-          "tp": 38528
+          "threshold": 0.8264415396502459,
+          "accuracy": 0.8638601136159165,
+          "precision": 0.9768821255803778,
+          "recall": 0.6651108904336313,
+          "f1": 0.7913979341650502,
+          "false_positive_rate": 0.009990335322295991,
+          "roc_auc": 0.9480026182349516,
+          "pr_auc": 0.9390424875051229,
+          "tn": 94241,
+          "fp": 951,
+          "fn": 20234,
+          "tp": 40186
         },
         "default": {
           "n": 155612,
           "threshold": 0.5,
-          "accuracy": 0.8912358944040305,
-          "precision": 0.9004400743891436,
-          "recall": 0.809367759020192,
-          "f1": 0.852478449215107,
-          "false_positive_rate": 0.05680099167997311,
-          "roc_auc": 0.9442777814765226,
-          "pr_auc": 0.9343778581442104,
-          "tn": 89785,
-          "fp": 5407,
-          "fn": 11518,
-          "tp": 48902
+          "accuracy": 0.8959463280466802,
+          "precision": 0.9053895508707608,
+          "recall": 0.8174280039721946,
+          "f1": 0.8591632599808645,
+          "false_positive_rate": 0.05421674090259686,
+          "roc_auc": 0.9480026182349516,
+          "pr_auc": 0.9390424875051229,
+          "tn": 90031,
+          "fp": 5161,
+          "fn": 11031,
+          "tp": 49389
         }
       },
       "external_unseen": {
         "balanced": {
           "n": 5839,
-          "threshold": 0.43554335314375486,
-          "accuracy": 0.870525774961466,
-          "precision": 0.7737321196358907,
-          "recall": 0.8841010401188707,
-          "f1": 0.8252427184466018,
-          "false_positive_rate": 0.13664921465968585,
-          "roc_auc": 0.9419173609868552,
-          "pr_auc": 0.8988403387257176,
-          "tn": 3298,
-          "fp": 522,
-          "fn": 234,
-          "tp": 1785
+          "threshold": 0.4817559926802973,
+          "accuracy": 0.8763486898441514,
+          "precision": 0.7951752389622212,
+          "recall": 0.8652798415056959,
+          "f1": 0.8287476280834916,
+          "false_positive_rate": 0.11780104712041885,
+          "roc_auc": 0.9437472285538693,
+          "pr_auc": 0.906151398788369,
+          "tn": 3370,
+          "fp": 450,
+          "fn": 272,
+          "tp": 1747
         },
         "strict": {
           "n": 5839,
-          "threshold": 0.8181236804303738,
-          "accuracy": 0.8116115773248844,
-          "precision": 0.9338999055712937,
-          "recall": 0.4898464586428925,
-          "f1": 0.6426250812215725,
-          "false_positive_rate": 0.01832460732984293,
-          "roc_auc": 0.9419173609868552,
-          "pr_auc": 0.8988403387257176,
-          "tn": 3750,
-          "fp": 70,
-          "fn": 1030,
-          "tp": 989
+          "threshold": 0.8264415396502459,
+          "accuracy": 0.8283952731632129,
+          "precision": 0.937231298366294,
+          "recall": 0.5398712233779098,
+          "f1": 0.6851037083595223,
+          "false_positive_rate": 0.019109947643979056,
+          "roc_auc": 0.9437472285538693,
+          "pr_auc": 0.906151398788369,
+          "tn": 3747,
+          "fp": 73,
+          "fn": 929,
+          "tp": 1090
         },
         "default": {
           "n": 5839,
           "threshold": 0.5,
-          "accuracy": 0.8799451960952218,
-          "precision": 0.8088097469540768,
-          "recall": 0.854878652798415,
-          "f1": 0.8312063568504695,
-          "false_positive_rate": 0.1068062827225131,
-          "roc_auc": 0.9419173609868552,
-          "pr_auc": 0.8988403387257176,
-          "tn": 3412,
-          "fp": 408,
-          "fn": 293,
-          "tp": 1726
+          "accuracy": 0.8787463606781983,
+          "precision": 0.8044588945657223,
+          "recall": 0.8578504210004952,
+          "f1": 0.8302972195589645,
+          "false_positive_rate": 0.11020942408376963,
+          "roc_auc": 0.9437472285538693,
+          "pr_auc": 0.906151398788369,
+          "tn": 3399,
+          "fp": 421,
+          "fn": 287,
+          "tp": 1732
         }
       },
       "attack": {
-        "cut_off": 0.43554335314375486,
+        "cut_off": 0.4817559926802973,
         "sample": 400,
-        "caught_before_attack": 356,
+        "caught_before_attack": 353,
         "evaded_within_price": {
-          "1": 0.26685393258426965,
-          "2": 0.5280898876404494,
-          "3": 0.6797752808988764,
-          "4": 0.800561797752809,
-          "5": 0.8848314606741573,
-          "6": 0.9325842696629213
+          "1": 0.34277620396600567,
+          "2": 0.5807365439093485,
+          "3": 0.7223796033994334,
+          "4": 0.8441926345609065,
+          "5": 0.9263456090651558,
+          "6": 0.943342776203966
         },
         "attacker_success_within_price": {
-          "0": 0.11,
-          "1": 0.3475,
-          "2": 0.58,
-          "3": 0.715,
-          "4": 0.8225,
-          "5": 0.8975,
-          "6": 0.94
+          "0": 0.1175,
+          "1": 0.42,
+          "2": 0.63,
+          "3": 0.755,
+          "4": 0.8625,
+          "5": 0.935,
+          "6": 0.95
         },
-        "never_evaded_within_max_price": 0.06741573033707865,
-        "mean_price_when_evaded": 2.61144578313253,
+        "never_evaded_within_max_price": 0.056657223796033995,
+        "mean_price_when_evaded": 2.3783783783783785,
         "moves_in_cheapest_paths": {
-          "trim_path": 224,
-          "pad_path_suffix": 157,
-          "pad_path": 116,
-          "drop_subdomains": 50,
-          "drop_path_word": 47,
-          "shorten_token": 33,
-          "swap_tld": 32,
-          "pad_tracking": 21,
+          "trim_path": 198,
+          "pad_path_suffix": 129,
+          "pad_path": 119,
+          "drop_path_word": 60,
+          "drop_subdomains": 44,
+          "shorten_token": 32,
+          "swap_tld": 23,
+          "pad_tracking": 18,
           "ip_to_name": 13,
-          "drop_extension": 10,
-          "drop_query": 9,
-          "drop_host_word": 3,
-          "plain_name": 2
+          "drop_extension": 11,
+          "drop_query": 8,
+          "lowercase_path": 5,
+          "plain_name": 2,
+          "drop_host_word": 2
         },
         "mean_single_move_change": {
-          "ip_to_name": -0.5195532806582771,
-          "drop_subdomains": -0.29723903005329466,
-          "drop_host_word": -0.19425909925466076,
-          "pad_path": -0.1865430501901859,
-          "pad_path_suffix": -0.18034742134665732,
-          "swap_tld": -0.12099008472638598,
-          "drop_path_word": -0.09846990240527885,
-          "trim_path": -0.06312002310525543,
-          "shorten_token": -0.062380707606982715,
-          "plain_name": -0.035797298349408334,
-          "drop_query": -0.024183225370994432,
-          "drop_extension": -0.023856658050333625,
-          "lowercase_path": -0.011680313349681034,
-          "pad_tracking": -0.005422329981524071,
+          "ip_to_name": -0.5264476281439324,
+          "drop_subdomains": -0.2931130256584103,
+          "pad_path": -0.19696268876960032,
+          "pad_path_suffix": -0.18709106905133588,
+          "drop_host_word": -0.1736355996446912,
+          "swap_tld": -0.118563360093855,
+          "drop_path_word": -0.10507588782052461,
+          "shorten_token": -0.08139910468443798,
+          "trim_path": -0.07253211233200624,
+          "plain_name": -0.03297904213851524,
+          "drop_query": -0.028730871687847416,
+          "lowercase_path": -0.020585126264090932,
+          "drop_extension": -0.013283074133289913,
+          "pad_tracking": -0.006505584192270685,
           "drop_fragment": 0.0
         },
         "examples": [
           {
             "url": "vacomsystems.com/wp-content/uploads/2020/07/online/chase/home",
-            "score": 0.9399587814020616,
+            "score": 0.9625184621164111,
             "steps": [
               {
                 "move": "trim_path",
                 "label": "Remove a folder from the path",
                 "url": "vacomsystems.com/wp-content/2020/07/online/chase/home",
-                "score": 0.8762161839683981,
+                "score": 0.9087755270856827,
                 "price": 1
               },
               {
                 "move": "trim_path",
                 "label": "Remove a folder from the path",
                 "url": "vacomsystems.com/2020/07/online/chase/home",
-                "score": 0.575886082571593,
+                "score": 0.5769301684719559,
                 "price": 1
               },
               {
                 "move": "trim_path",
                 "label": "Remove a folder from the path",
                 "url": "vacomsystems.com/2020/07/chase/home",
-                "score": 0.17365049304292735,
+                "score": 0.1746297523606366,
                 "price": 1
               }
             ]
           },
           {
             "url": "alphacon.co.id/loggers/kazhank/drpsze/ms.php",
-            "score": 0.922137408908062,
+            "score": 0.9355778250454467,
             "steps": [
               {
                 "move": "swap_tld",
                 "label": "Move to a mainstream ending",
                 "url": "alphacon.org/loggers/kazhank/drpsze/ms.php",
-                "score": 0.698859478240519,
+                "score": 0.6705108914324804,
                 "price": 2
               },
               {
                 "move": "drop_extension",
                 "label": "Hide the file extension",
                 "url": "alphacon.org/loggers/kazhank/drpsze/ms",
-                "score": 0.33053318974687856,
+                "score": 0.28244579322035174,
                 "price": 1
               }
             ]
           },
           {
             "url": "villahidalgoysugente.com/education/resFolder/",
-            "score": 0.6951508143682881,
+            "score": 0.7638771823617705,
             "steps": [
               {
-                "move": "pad_path_suffix",
-                "label": "Add ordinary folders after the page",
-                "url": "villahidalgoysugente.com/education/resFolder/blog/2024",
-                "score": 0.32232844100776603,
+                "move": "pad_path",
+                "label": "Add an ordinary-looking folder",
+                "url": "villahidalgoysugente.com/blog/2024/education/resFolder/",
+                "score": 0.3277175891507385,
                 "price": 1
               }
             ]
           },
           {
             "url": "support10000.mixh.jp/login/account/app/captcha",
-            "score": 0.8758034002347577,
+            "score": 0.9287734839517214,
             "steps": [
               {
                 "move": "drop_subdomains",
                 "label": "Remove the subdomain",
                 "url": "mixh.jp/login/account/app/captcha",
-                "score": 0.6122225804387128,
+                "score": 0.6971344495165095,
                 "price": 3
               },
               {
                 "move": "drop_path_word",
                 "label": "Rename a bait word in the path",
                 "url": "mixh.jp/login//app/captcha",
-                "score": 0.5643867370583489,
-                "price": 1
-              },
-              {
-                "move": "pad_path_suffix",
-                "label": "Add ordinary folders after the page",
-                "url": "mixh.jp/login//app/captcha/blog/2024",
-                "score": 0.368630823280572,
+                "score": 0.4107564154337028,
                 "price": 1
               }
             ]
           }
         ],
-        "seconds": 121.8
+        "seconds": 154.9
       }
     },
     "multi_view": {
@@ -579,257 +574,264 @@
       "views_per_url": 2.76665,
       "thresholds": {
         "default": 0.5,
-        "max_f1": 0.5341036642796435,
-        "low_fpr": 0.8399453343837535,
+        "max_f1": 0.5419056318074581,
+        "low_fpr": 0.8584134282344342,
         "low_fpr_target": 0.01
       },
       "validation": {
         "balanced": {
           "n": 155612,
-          "threshold": 0.5341036642796435,
-          "accuracy": 0.8799064339511091,
-          "precision": 0.8691790516631281,
-          "recall": 0.8130751406818935,
-          "f1": 0.8401915512228494,
-          "false_positive_rate": 0.07767459450373981,
-          "roc_auc": 0.9288441476205765,
-          "pr_auc": 0.9210395303478397,
-          "tn": 87798,
-          "fp": 7394,
-          "fn": 11294,
-          "tp": 49126
+          "threshold": 0.5419056318074581,
+          "accuracy": 0.8803434182453795,
+          "precision": 0.8656403079076277,
+          "recall": 0.8189341277722608,
+          "f1": 0.8416397346487497,
+          "false_positive_rate": 0.08067904865955122,
+          "roc_auc": 0.9319616707892776,
+          "pr_auc": 0.9245777328685209,
+          "tn": 87512,
+          "fp": 7680,
+          "fn": 10940,
+          "tp": 49480
         },
         "strict": {
           "n": 155612,
-          "threshold": 0.8399453343837535,
-          "accuracy": 0.846123692260237,
-          "precision": 0.9752195325325065,
-          "recall": 0.619430652101953,
-          "f1": 0.7576343411237184,
+          "threshold": 0.8584134282344342,
+          "accuracy": 0.8543814101740226,
+          "precision": 0.976022389188644,
+          "recall": 0.640698444223767,
+          "f1": 0.7735856597589976,
           "false_positive_rate": 0.009990335322295991,
-          "roc_auc": 0.9288441476205765,
-          "pr_auc": 0.9210395303478397,
+          "roc_auc": 0.9319616707892776,
+          "pr_auc": 0.9245777328685209,
           "tn": 94241,
           "fp": 951,
-          "fn": 22994,
-          "tp": 37426
+          "fn": 21709,
+          "tp": 38711
         },
         "default": {
           "n": 155612,
           "threshold": 0.5,
-          "accuracy": 0.875902886666838,
-          "precision": 0.8517016580257687,
-          "recall": 0.8238331678252234,
-          "f1": 0.8375356502864643,
-          "false_positive_rate": 0.09104756702243887,
-          "roc_auc": 0.9288441476205765,
-          "pr_auc": 0.9210395303478397,
-          "tn": 86525,
-          "fp": 8667,
-          "fn": 10644,
-          "tp": 49776
+          "accuracy": 0.8760121327404056,
+          "precision": 0.8451210097009164,
+          "recall": 0.8333995365772923,
+          "f1": 0.8392193463442277,
+          "false_positive_rate": 0.09694091940499201,
+          "roc_auc": 0.9319616707892776,
+          "pr_auc": 0.9245777328685209,
+          "tn": 85964,
+          "fp": 9228,
+          "fn": 10066,
+          "tp": 50354
         }
       },
       "external_unseen": {
         "balanced": {
           "n": 5839,
-          "threshold": 0.5341036642796435,
-          "accuracy": 0.872923445795513,
-          "precision": 0.7900954111767379,
-          "recall": 0.8613174839029223,
-          "f1": 0.8241706161137441,
-          "false_positive_rate": 0.12094240837696335,
-          "roc_auc": 0.9397267840333584,
-          "pr_auc": 0.8971104920650604,
-          "tn": 3358,
-          "fp": 462,
-          "fn": 280,
-          "tp": 1739
+          "threshold": 0.5419056318074581,
+          "accuracy": 0.8657304332933722,
+          "precision": 0.7757927646270657,
+          "recall": 0.8603268945022289,
+          "f1": 0.8158759981211837,
+          "false_positive_rate": 0.13141361256544504,
+          "roc_auc": 0.9415574295501634,
+          "pr_auc": 0.9030399749434515,
+          "tn": 3318,
+          "fp": 502,
+          "fn": 282,
+          "tp": 1737
         },
         "strict": {
           "n": 5839,
-          "threshold": 0.8399453343837535,
-          "accuracy": 0.8160643945881144,
-          "precision": 0.93790546802595,
-          "recall": 0.5012382367508668,
-          "f1": 0.6533247256294383,
-          "false_positive_rate": 0.017539267015706805,
-          "roc_auc": 0.9397267840333584,
-          "pr_auc": 0.8971104920650604,
-          "tn": 3753,
-          "fp": 67,
-          "fn": 1007,
-          "tp": 1012
+          "threshold": 0.8584134282344342,
+          "accuracy": 0.8220585716732317,
+          "precision": 0.9438405797101449,
+          "recall": 0.516097077761268,
+          "f1": 0.6673070765289786,
+          "false_positive_rate": 0.016230366492146597,
+          "roc_auc": 0.9415574295501634,
+          "pr_auc": 0.9030399749434515,
+          "tn": 3758,
+          "fp": 62,
+          "fn": 977,
+          "tp": 1042
         },
         "default": {
           "n": 5839,
           "threshold": 0.5,
-          "accuracy": 0.8671005309128276,
-          "precision": 0.7698653929656969,
-          "recall": 0.8781575037147102,
-          "f1": 0.8204534937528922,
-          "false_positive_rate": 0.1387434554973822,
-          "roc_auc": 0.9397267840333584,
-          "pr_auc": 0.8971104920650604,
-          "tn": 3290,
-          "fp": 530,
-          "fn": 246,
-          "tp": 1773
+          "accuracy": 0.8617914026374379,
+          "precision": 0.75809199318569,
+          "recall": 0.8816245666171372,
+          "f1": 0.8152049461873139,
+          "false_positive_rate": 0.1486910994764398,
+          "roc_auc": 0.9415574295501634,
+          "pr_auc": 0.9030399749434515,
+          "tn": 3252,
+          "fp": 568,
+          "fn": 239,
+          "tp": 1780
         }
       },
       "attack": {
-        "cut_off": 0.5341036642796435,
+        "cut_off": 0.5419056318074581,
         "sample": 400,
-        "caught_before_attack": 350,
+        "caught_before_attack": 347,
         "evaded_within_price": {
-          "1": 0.11142857142857143,
-          "2": 0.3314285714285714,
-          "3": 0.5685714285714286,
-          "4": 0.6885714285714286,
-          "5": 0.82,
-          "6": 0.8514285714285714
+          "1": 0.12680115273775217,
+          "2": 0.34293948126801155,
+          "3": 0.579250720461095,
+          "4": 0.6858789625360231,
+          "5": 0.8069164265129684,
+          "6": 0.8328530259365994
         },
         "attacker_success_within_price": {
-          "0": 0.125,
-          "1": 0.2225,
-          "2": 0.415,
-          "3": 0.6225,
+          "0": 0.1325,
+          "1": 0.2425,
+          "2": 0.43,
+          "3": 0.635,
           "4": 0.7275,
-          "5": 0.8425,
-          "6": 0.87
+          "5": 0.8325,
+          "6": 0.855
         },
-        "never_evaded_within_max_price": 0.14857142857142858,
-        "mean_price_when_evaded": 3.040268456375839,
+        "never_evaded_within_max_price": 0.16714697406340057,
+        "mean_price_when_evaded": 2.9480968858131487,
         "moves_in_cheapest_paths": {
-          "trim_path": 229,
-          "drop_subdomains": 75,
-          "swap_tld": 74,
-          "drop_path_word": 69,
-          "pad_path_suffix": 53,
-          "pad_path": 47,
-          "shorten_token": 32,
-          "drop_extension": 29,
+          "trim_path": 188,
+          "drop_path_word": 75,
+          "drop_subdomains": 73,
+          "swap_tld": 72,
+          "pad_path": 48,
+          "pad_path_suffix": 42,
+          "shorten_token": 37,
+          "drop_extension": 19,
           "ip_to_name": 13,
-          "pad_tracking": 11,
+          "pad_tracking": 13,
           "drop_host_word": 9,
-          "plain_name": 6,
-          "drop_query": 4,
-          "lowercase_path": 3
+          "plain_name": 7,
+          "lowercase_path": 6,
+          "drop_query": 3
         },
         "mean_single_move_change": {
-          "ip_to_name": -0.5000001305870154,
-          "drop_subdomains": -0.28894426933315226,
-          "drop_host_word": -0.19425909925466076,
-          "swap_tld": -0.12254200890507279,
-          "drop_path_word": -0.08705462813752088,
-          "shorten_token": -0.06079442502231658,
-          "trim_path": -0.059530568872452144,
-          "pad_path": -0.03920734323311935,
-          "pad_path_suffix": -0.0382176072285709,
-          "plain_name": -0.03385447472015891,
-          "drop_extension": -0.02175081543520583,
-          "drop_query": -0.019208942915412842,
-          "lowercase_path": -0.007418107836014018,
-          "pad_tracking": -0.004268539974700618,
+          "ip_to_name": -0.5015543563145702,
+          "drop_subdomains": -0.27622906641503475,
+          "drop_host_word": -0.1736355996446912,
+          "swap_tld": -0.11865767248870634,
+          "drop_path_word": -0.08784454615303991,
+          "trim_path": -0.06384687741868884,
+          "shorten_token": -0.06381766083989415,
+          "pad_path": -0.0429063918268134,
+          "pad_path_suffix": -0.04077135365322949,
+          "plain_name": -0.034509216338996763,
+          "drop_query": -0.024622998095271926,
+          "lowercase_path": -0.014981566175525821,
+          "drop_extension": -0.008390734789846309,
+          "pad_tracking": -0.0055290931881123,
           "drop_fragment": 0.0
         },
         "examples": [
           {
             "url": "vacomsystems.com/wp-content/uploads/2020/07/online/chase/home",
-            "score": 0.9399587814020616,
+            "score": 0.9625184621164111,
             "steps": [
               {
                 "move": "trim_path",
                 "label": "Remove a folder from the path",
                 "url": "vacomsystems.com/wp-content/2020/07/online/chase/home",
-                "score": 0.8762161839683981,
+                "score": 0.9087755270856827,
                 "price": 1
               },
               {
                 "move": "trim_path",
                 "label": "Remove a folder from the path",
                 "url": "vacomsystems.com/2020/07/online/chase/home",
-                "score": 0.575886082571593,
+                "score": 0.6874501225997671,
                 "price": 1
               },
               {
                 "move": "trim_path",
                 "label": "Remove a folder from the path",
                 "url": "vacomsystems.com/2020/07/chase/home",
-                "score": 0.5687439597910647,
+                "score": 0.6874501225997671,
                 "price": 1
               },
               {
                 "move": "trim_path",
                 "label": "Remove a folder from the path",
                 "url": "vacomsystems.com/2020/07/home",
-                "score": 0.4688587792403203,
+                "score": 0.5876018212351823,
+                "price": 1
+              },
+              {
+                "move": "pad_path",
+                "label": "Add an ordinary-looking folder",
+                "url": "vacomsystems.com/blog/2024/2020/07/home",
+                "score": 0.34422480104300357,
                 "price": 1
               }
             ]
           },
           {
             "url": "alphacon.co.id/loggers/kazhank/drpsze/ms.php",
-            "score": 0.922137408908062,
+            "score": 0.9355778250454467,
             "steps": [
               {
                 "move": "swap_tld",
                 "label": "Move to a mainstream ending",
                 "url": "alphacon.org/loggers/kazhank/drpsze/ms.php",
-                "score": 0.698859478240519,
+                "score": 0.6705108914324804,
                 "price": 2
               },
               {
                 "move": "drop_extension",
                 "label": "Hide the file extension",
                 "url": "alphacon.org/loggers/kazhank/drpsze/ms",
-                "score": 0.4245041621637219,
+                "score": 0.4091775182625119,
                 "price": 1
               }
             ]
           },
           {
             "url": "villahidalgoysugente.com/education/resFolder/",
-            "score": 0.6951508143682881,
+            "score": 0.7638771823617705,
             "steps": [
               {
-                "move": "pad_path",
-                "label": "Add an ordinary-looking folder",
-                "url": "villahidalgoysugente.com/blog/2024/education/resFolder/",
-                "score": 0.5234103997517959,
+                "move": "pad_path_suffix",
+                "label": "Add ordinary folders after the page",
+                "url": "villahidalgoysugente.com/education/resFolder/blog/2024",
+                "score": 0.6233146337949358,
+                "price": 1
+              },
+              {
+                "move": "trim_path",
+                "label": "Remove a folder from the path",
+                "url": "villahidalgoysugente.com/education/blog/2024",
+                "score": 0.4512658181563348,
                 "price": 1
               }
             ]
           },
           {
             "url": "support10000.mixh.jp/login/account/app/captcha",
-            "score": 0.8758034002347577,
+            "score": 0.9287734839517214,
             "steps": [
               {
                 "move": "drop_subdomains",
                 "label": "Remove the subdomain",
                 "url": "mixh.jp/login/account/app/captcha",
-                "score": 0.6122225804387128,
+                "score": 0.6971344495165095,
                 "price": 3
               },
               {
                 "move": "drop_path_word",
                 "label": "Rename a bait word in the path",
                 "url": "mixh.jp/login//app/captcha",
-                "score": 0.5643867370583489,
-                "price": 1
-              },
-              {
-                "move": "drop_path_word",
-                "label": "Rename a bait word in the path",
-                "url": "mixh.jp///app/captcha",
-                "score": 0.43450254766610064,
+                "score": 0.4199983008341951,
                 "price": 1
               }
             ]
           }
         ],
-        "seconds": 162.8
+        "seconds": 339.2
       }
     }
   },
@@ -843,8 +845,8 @@
     "external_unseen": {
       "benign_flagged": 0.0002617801047120419,
       "malicious_flagged": 0.02674591381872214,
-      "malicious_missed_by_model": 229,
-      "of_those_flagged_by_lookalike": 3,
+      "malicious_missed_by_model": 232,
+      "of_those_flagged_by_lookalike": 4,
       "techniques_on_malicious": {
         "typo": 3,
         "subdomain": 46,
@@ -871,6 +873,6 @@
       ]
     }
   },
-  "evaluated_at": "2026-11-24 17:19:35",
-  "minutes": 14.6
+  "evaluated_at": "2026-11-25 01:30:49",
+  "minutes": 33.5
 }

@@ -31,6 +31,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import numpy as np
 import pandas as pd
+from sklearn.metrics import average_precision_score, roc_auc_score
 
 import features as F
 from predict import MODEL_PATH, UrlClassifier
@@ -106,7 +107,9 @@ def main() -> int:
 
     clf = UrlClassifier()
     t1 = time.time()
-    p = clf.score(df["raw_url"].tolist())      # raw strings in, as a user would pass them
+    X = clf.featurise(df["raw_url"].tolist())   # raw strings in, as a user would pass them
+    parts = clf.score_parts(X)
+    p = clf.score_features(X)
     report["ms_per_url"] = round((time.time() - t1) / len(df) * 1000, 4)
     report["thresholds"] = clf.thresholds
 
@@ -119,6 +122,11 @@ def main() -> int:
         res["malicious_share"] = float(y[rows].mean())
         report["results"][name] = res
     report["results"]["unseen_sites"]["curves"] = curve_points(y[~seen_site], p[~seen_site], 80)
+    # each half of the model on its own (threshold-free measures; the cut-offs belong to the average)
+    report["halves_unseen_sites"] = {
+        name: {"pr_auc": float(average_precision_score(y[~seen_site], q[~seen_site])),
+               "roc_auc": float(roc_auc_score(y[~seen_site], q[~seen_site]))}
+        for name, q in {**parts, "average": p}.items()}
 
     # Most confident mistakes on unseen sites, for the write-up.
     sub = df[~seen_site].assign(score=p[~seen_site])

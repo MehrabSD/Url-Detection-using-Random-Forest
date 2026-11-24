@@ -1,9 +1,11 @@
-# Malicious URL detection (random forest) - mini project
+# Malicious URL detection (random forest + gradient boosting) - mini project
 
 ## Layout
 - `src/download_data.py` -> `data/raw/<dataset>/` (never edit raw files)
 - `src/prepare_data.py` -> `data/processed/dataset.parquet` + `prepare_report.json`
-- `src/train.py` -> `models/malicious_url_rf.joblib` + `reports/metrics.json`
+- `src/train.py` -> `models/malicious_url_rf.joblib` + `reports/metrics.json`. The model is a random
+  forest averaged with a HistGradientBoostingClassifier (bundle keys `model` = forest, `booster`);
+  `UrlClassifier.score` is the mean of the two probabilities, `score_parts` gives each half.
 - `src/make_figures.py` -> `reports/figures/*.png` (reads the JSON reports only)
 - `src/predict.py` - CLI / `UrlClassifier` class for scoring URLs
 - `src/evaluate_external.py` -> `reports/external_eval.json` (saved model scored on
@@ -25,10 +27,11 @@
   reading a new file, add it to the Dockerfile's COPY lines and to `FIXED_FILES` in that script.
   Keep `scikit-learn` in `requirements-serve.txt` equal to the version that saved the model.
 - `src/stacking_experiment.py` -> `reports/stacking.json`: boosting / averaging / stacking vs the
-  forest (validation halves + external data; never the test buckets). Stacking was not adopted.
+  forest (validation halves + external data; never the test buckets). Stacking was not adopted;
+  the forest + booster average it measured was adopted into train.py.
 - `src/ensemble_experiment.py` -> `reports/ensemble.json`: forest + KNN + SVMs (vote, learned blend),
   same protocol. Not adopted: below the forest on validation, external gains within noise.
-- `src/compact_forest.py` -> `models/malicious_url_rf.npz`: the forest as flat arrays, which
+- `src/compact_forest.py` -> `models/malicious_url_rf.npz`: forest and booster as flat arrays, which
   the server and the container use (fits Render's free 512 MB; `render.yaml`). train.py writes
   it; after replacing the .joblib any other way, run it by hand. It must stay committed to git
   (Render builds from the repository); the .joblib stays ignored.

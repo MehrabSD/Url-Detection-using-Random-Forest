@@ -143,6 +143,7 @@ def state(model: Model) -> dict:
         "version": model.version(),
         "model": {
             "trees": clf.n_trees,
+            "boosting_rounds": clf.n_rounds,
             "features": len(clf.feature_names),
             "file": model.path.name,
             "file_modified": datetime.fromtimestamp(model.path.stat().st_mtime).isoformat(timespec="seconds"),
