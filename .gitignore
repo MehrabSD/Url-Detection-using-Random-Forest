@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+# raw + processed data are re-creatable with src/download_data.py and src/prepare_data.py
+data/*
+!data/processed/
+data/processed/*
+# small report read by the demo page and the documentation
+!data/processed/prepare_report.json
+# the trained model is large; re-create it with src/train.py
+models/*.joblib

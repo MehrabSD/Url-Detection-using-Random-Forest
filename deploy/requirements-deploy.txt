@@ -1,0 +1,2 @@
+# Only needed to publish the demo to Hugging Face (deploy/push_to_hf_space.py).
+huggingface_hub==2.4.0

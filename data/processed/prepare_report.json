@@ -1,0 +1,38 @@
+{
+  "steps": {
+    "dropped_junk": 627,
+    "dropped_conflicting_labels": 26730,
+    "dropped_duplicates": 104897
+  },
+  "raw_rows_by_source": {
+    "benchmark": 899995,
+    "kaggle": 651191,
+    "phiusiil": 235795
+  },
+  "kaggle_raw_scheme_rule_accuracy": 0.8374,
+  "kaggle_raw_scheme_share": {
+    "benign": 0.0828,
+    "defacement": 1.0,
+    "malware": 0.9628,
+    "phishing": 0.2642
+  },
+  "final_rows": 1654727,
+  "final_by_source_label": {
+    "benchmark/benign": 509986,
+    "benchmark/malicious": 292101,
+    "kaggle/benign": 422914,
+    "kaggle/malicious": 198520,
+    "phiusiil/benign": 133621,
+    "phiusiil/malicious": 97585
+  },
+  "final_by_subtype": {
+    "benign": 1066521,
+    "malicious": 292101,
+    "phishing": 177230,
+    "defacement": 95284,
+    "malware": 23591
+  },
+  "unique_domains": 698917,
+  "n_features": 53,
+  "seconds": 29.5
+}

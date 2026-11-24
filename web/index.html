@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Malicious URL detector</title>
+  <link rel="preload" href="fonts/archivo.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="fonts/martian-mono.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="style.css">
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <a class="skip" href="#url">Skip to the URL check</a>
+
+  <header class="top">
+    <p class="name">Malicious URL detector</p>
+    <nav class="nav" aria-label="Sections">
+      <a href="#check">Check a URL</a>
+      <a href="#lab">Try to fool it</a>
+      <a href="#inbox">Check a message</a>
+      <a href="#results">Test results</a>
+      <a href="#compare">Comparison</a>
+      <a href="#robustness">Robustness</a>
+      <a href="#mistakes">Mistakes</a>
+      <a href="#features">Features</a>
+    </nav>
+    <p class="facts" id="facts"></p>
+  </header>
+
+  <p class="notice" id="notice" role="status" aria-live="polite" hidden></p>
+
+  <main>
+    <section class="sheet" id="check" aria-labelledby="check-title">
+      <div class="ask">
+        <h1 id="check-title">Is this link malicious?</h1>
+        <p class="lede">The model reads only the text of the address. It never opens the link.</p>
+        <form class="entry" id="entry" novalidate>
+          <label class="entry-label" for="url">Address to check</label>
+          <div class="entry-row">
+            <input class="entry-input" id="url" name="url" type="text" inputmode="url"
+                   autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"
+                   placeholder="Paste or type a URL" aria-describedby="entry-error">
+            <button class="button" type="submit">Check URL</button>
+          </div>
+          <p class="entry-error" id="entry-error" role="alert" hidden></p>
+        </form>
+        <p class="examples" id="examples"></p>
+        <div class="qr" id="qr">
+          <p class="qr-line">
+            QR code on a poster or parcel note?
+            <button class="link" type="button" id="qr-file-button">Read it from a photo</button>
+            <button class="link" type="button" id="qr-camera-button">Use the camera</button>
+            <span class="qr-hint">or paste or drop an image anywhere on this card.</span>
+            <input type="file" id="qr-file" accept="image/*" hidden>
+          </p>
+          <div class="qr-camera" id="qr-camera" hidden>
+            <video id="qr-video" playsinline muted></video>
+            <button class="more" type="button" id="qr-stop">Stop the camera</button>
+          </div>
+          <p class="qr-status" id="qr-status" role="status" aria-live="polite"></p>
+        </div>
+      </div>
+
+      <div class="reading" id="reading" hidden>
+        <div class="specimen-block">
+          <div class="specimen" id="specimen" role="img"></div>
+          <p class="specimen-note" id="specimen-note"></p>
+          <dl class="parts" id="parts"></dl>
+        </div>
+
+        <div class="lookalike" id="lookalike"></div>
+
+        <div class="outcome">
+          <div class="verdict" id="verdict"></div>
+          <div class="votes-block">
+            <h2 class="minor" id="votes-title"></h2>
+            <div id="votes"></div>
+          </div>
+        </div>
+
+        <div class="why">
+          <h2 class="minor">What moved the score</h2>
+          <p class="explain" id="why-intro"></p>
+          <div id="why"></div>
+        </div>
+      </div>
+
+      <p class="waiting" id="waiting">Loading the model.</p>
+    </section>
+
+    <section class="sheet lab" id="lab" aria-labelledby="lab-title">
+      <h2 class="sheet-title" id="lab-title">Try to sneak it past the model</h2>
+      <p class="lede">An attacker whose link gets flagged will simply change it. This plays that
+        attacker: it tries realistic edits, keeps the ones that lower the score most, and stops
+        at the cheapest version that would pass.</p>
+      <div id="lab-controls"></div>
+      <div id="lab-result" aria-live="polite"></div>
+    </section>
+
+    <section class="sheet inbox" id="inbox" aria-labelledby="inbox-title">
+      <h2 class="sheet-title" id="inbox-title">Check a whole message</h2>
+      <p class="lede">Paste an email, a text message or a page's HTML. Every web address in it is
+        found and scored, the riskiest first. Defanged links such as hxxp://site[.]com are read too.</p>
+      <form class="inbox-form" id="inbox-form" novalidate>
+        <label class="entry-label" for="inbox-text">Message text or HTML</label>
+        <textarea class="inbox-text" id="inbox-text" rows="9" spellcheck="false"
+                  placeholder="Paste the message here" aria-describedby="inbox-error"></textarea>
+        <div class="inbox-actions">
+          <button class="button" type="submit">Check every link</button>
+          <button class="link" type="button" id="inbox-sample">Load a sample phishing email</button>
+          <button class="link" type="button" id="inbox-clear">Clear</button>
+        </div>
+        <p class="entry-error" id="inbox-error" role="alert" hidden></p>
+      </form>
+      <div id="inbox-result" aria-live="polite"></div>
+    </section>
+
+    <section class="report" id="results" aria-labelledby="results-title">
+      <h2 id="results-title">How it does on sites it has never seen</h2>
+      <div id="results-body"></div>
+    </section>
+
+    <section class="report" id="compare" aria-labelledby="compare-title">
+      <h2 id="compare-title">Against simpler models</h2>
+      <div id="compare-body"></div>
+    </section>
+
+    <section class="report" id="robustness" aria-labelledby="robustness-title">
+      <h2 id="robustness-title">How easily it is fooled, and a fix</h2>
+      <div id="robustness-body"></div>
+    </section>
+
+    <section class="report" id="mistakes" aria-labelledby="mistakes-title">
+      <h2 id="mistakes-title">Where it goes wrong</h2>
+      <div id="mistakes-body"></div>
+    </section>
+
+    <section class="report" id="features" aria-labelledby="features-title">
+      <h2 id="features-title">What the model pays attention to</h2>
+      <div id="features-body"></div>
+    </section>
+  </main>
+
+  <footer class="foot" id="foot"></footer>
+  <div class="tip" id="tip" role="tooltip" hidden></div>
+</body>
+</html>

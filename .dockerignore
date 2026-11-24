@@ -1,0 +1,12 @@
+# Keep the build context small: only what the Dockerfile copies is needed.
+.venv/
+.git/
+**/__pycache__/
+*.pyc
+data/raw/
+data/processed/dataset.parquet
+reports/figures/
+tests/
+deploy/
+*.md
+*.bat

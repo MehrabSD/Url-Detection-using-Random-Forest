@@ -1,0 +1,876 @@
+{
+  "config": {
+    "seed": 42,
+    "attack_sample": 400,
+    "max_price": 6,
+    "beam": 6,
+    "depth": 5,
+    "attack_mode": "balanced",
+    "moves": [
+      {
+        "id": "pad_tracking",
+        "label": "Add tracking parameters",
+        "price": 1,
+        "description": "Append utm_ tags of the kind every newsletter link carries."
+      },
+      {
+        "id": "pad_path",
+        "label": "Add an ordinary-looking folder",
+        "price": 1,
+        "description": "Put the page under a folder such as /en-us/help/."
+      },
+      {
+        "id": "pad_path_suffix",
+        "label": "Add ordinary folders after the page",
+        "price": 1,
+        "description": "Route a longer address such as /login/en-us/help to the same page."
+      },
+      {
+        "id": "drop_query",
+        "label": "Drop the query string",
+        "price": 1,
+        "description": "Serve the page without the ?parameters."
+      },
+      {
+        "id": "drop_fragment",
+        "label": "Drop the # fragment",
+        "price": 1,
+        "description": "Leave out the part after #."
+      },
+      {
+        "id": "drop_extension",
+        "label": "Hide the file extension",
+        "price": 1,
+        "description": "Rewrite /claim.php as /claim, which any web server can do."
+      },
+      {
+        "id": "drop_path_word",
+        "label": "Rename a bait word in the path",
+        "price": 1,
+        "description": "Remove words such as login, verify or account from the path or query."
+      },
+      {
+        "id": "trim_path",
+        "label": "Remove a folder from the path",
+        "price": 1,
+        "description": "Serve the page one folder higher."
+      },
+      {
+        "id": "shorten_token",
+        "label": "Shorten a long random token",
+        "price": 1,
+        "description": "Replace a long random id with a short one."
+      },
+      {
+        "id": "lowercase_path",
+        "label": "Lower-case the path",
+        "price": 1,
+        "description": "Use only small letters in the path."
+      },
+      {
+        "id": "swap_tld",
+        "label": "Move to a mainstream ending",
+        "price": 2,
+        "description": "Register the same name under .com, .net or .org instead."
+      },
+      {
+        "id": "ip_to_name",
+        "label": "Use a domain name instead of an IP",
+        "price": 2,
+        "description": "Point a freshly registered, bland name at the same server."
+      },
+      {
+        "id": "plain_name",
+        "label": "Register a plainer name",
+        "price": 2,
+        "description": "The same name without hyphens and digits."
+      },
+      {
+        "id": "drop_host_word",
+        "label": "Register a name without the bait word",
+        "price": 2,
+        "description": "The same name with words such as secure or login removed."
+      },
+      {
+        "id": "drop_subdomains",
+        "label": "Remove the subdomain",
+        "price": 3,
+        "description": "Drop the levels in front of the real domain, including any brand name placed there to fool the reader."
+      }
+    ],
+    "prices": {
+      "1": {
+        "label": "Free",
+        "description": "Rename something on a server the attacker already controls."
+      },
+      "2": {
+        "label": "New domain",
+        "description": "Register another address: a few dollars and a little time."
+      },
+      "3": {
+        "label": "Weaker bait",
+        "description": "Remove the brand or lure the victim was meant to trust."
+      }
+    }
+  },
+  "defences": {
+    "plain": {
+      "description": "The model as trained: one score for the URL as given.",
+      "views_per_url": 1.0,
+      "thresholds": {
+        "default": 0.5,
+        "max_f1": 0.4198198528822965,
+        "low_fpr": 0.7966146019387413,
+        "low_fpr_target": 0.01
+      },
+      "validation": {
+        "balanced": {
+          "n": 155612,
+          "threshold": 0.4198198528822965,
+          "accuracy": 0.8952265892090584,
+          "precision": 0.8904347210421977,
+          "recall": 0.8326050976497849,
+          "f1": 0.8605494543090766,
+          "false_positive_rate": 0.06502647281284142,
+          "roc_auc": 0.94808013948165,
+          "pr_auc": 0.9388712003482957,
+          "tn": 89002,
+          "fp": 6190,
+          "fn": 10114,
+          "tp": 50306
+        },
+        "strict": {
+          "n": 155612,
+          "threshold": 0.7966146019387413,
+          "accuracy": 0.8592653522864561,
+          "precision": 0.9764732076591955,
+          "recall": 0.6532770605759682,
+          "f1": 0.7828285833283751,
+          "false_positive_rate": 0.009990335322295991,
+          "roc_auc": 0.94808013948165,
+          "pr_auc": 0.9388712003482957,
+          "tn": 94241,
+          "fp": 951,
+          "fn": 20949,
+          "tp": 39471
+        },
+        "default": {
+          "n": 155612,
+          "threshold": 0.5,
+          "accuracy": 0.8959848854844099,
+          "precision": 0.9165316961090814,
+          "recall": 0.8054617676266137,
+          "f1": 0.8574146831339523,
+          "false_positive_rate": 0.04655853433061602,
+          "roc_auc": 0.94808013948165,
+          "pr_auc": 0.9388712003482957,
+          "tn": 90760,
+          "fp": 4432,
+          "fn": 11754,
+          "tp": 48666
+        }
+      },
+      "external_unseen": {
+        "balanced": {
+          "n": 5839,
+          "threshold": 0.4198198528822965,
+          "accuracy": 0.8657304332933722,
+          "precision": 0.7633262260127932,
+          "recall": 0.8865775136206042,
+          "f1": 0.8203483043079745,
+          "false_positive_rate": 0.14528795811518325,
+          "roc_auc": 0.9404944908188959,
+          "pr_auc": 0.8955362195693408,
+          "tn": 3265,
+          "fp": 555,
+          "fn": 229,
+          "tp": 1790
+        },
+        "strict": {
+          "n": 5839,
+          "threshold": 0.7966146019387413,
+          "accuracy": 0.8157218701832506,
+          "precision": 0.9228699551569507,
+          "recall": 0.5096582466567607,
+          "f1": 0.6566687938736439,
+          "false_positive_rate": 0.022513089005235604,
+          "roc_auc": 0.9404944908188959,
+          "pr_auc": 0.8955362195693408,
+          "tn": 3734,
+          "fp": 86,
+          "fn": 990,
+          "tp": 1029
+        },
+        "default": {
+          "n": 5839,
+          "threshold": 0.5,
+          "accuracy": 0.8789176228806302,
+          "precision": 0.811787072243346,
+          "recall": 0.8459633481921743,
+          "f1": 0.8285229202037352,
+          "false_positive_rate": 0.10366492146596859,
+          "roc_auc": 0.9404944908188959,
+          "pr_auc": 0.8955362195693408,
+          "tn": 3424,
+          "fp": 396,
+          "fn": 311,
+          "tp": 1708
+        }
+      },
+      "attack": {
+        "cut_off": 0.4198198528822965,
+        "sample": 400,
+        "caught_before_attack": 352,
+        "evaded_within_price": {
+          "1": 0.8210227272727273,
+          "2": 0.9289772727272727,
+          "3": 0.9857954545454546,
+          "4": 0.9971590909090909,
+          "5": 0.9971590909090909,
+          "6": 0.9971590909090909
+        },
+        "attacker_success_within_price": {
+          "0": 0.12,
+          "1": 0.8425,
+          "2": 0.9375,
+          "3": 0.9875,
+          "4": 0.9975,
+          "5": 0.9975,
+          "6": 0.9975
+        },
+        "never_evaded_within_max_price": 0.002840909090909091,
+        "mean_price_when_evaded": 1.2564102564102564,
+        "moves_in_cheapest_paths": {
+          "pad_tracking": 376,
+          "pad_path": 17,
+          "ip_to_name": 13,
+          "trim_path": 5,
+          "pad_path_suffix": 5,
+          "drop_query": 3,
+          "shorten_token": 3,
+          "drop_subdomains": 2
+        },
+        "mean_single_move_change": {
+          "pad_tracking": -0.5228543359273626,
+          "ip_to_name": -0.5204778550366194,
+          "drop_subdomains": -0.28654241885822357,
+          "drop_host_word": -0.19425909925466076,
+          "pad_path": -0.1849275324461598,
+          "pad_path_suffix": -0.17916355640823836,
+          "swap_tld": -0.11786286377223633,
+          "drop_path_word": -0.09811323987516327,
+          "trim_path": -0.060481811870383394,
+          "shorten_token": -0.05711228342527358,
+          "plain_name": -0.03328093543839923,
+          "drop_extension": -0.02372319451385738,
+          "lowercase_path": -0.010792505677095707,
+          "drop_query": 0.03013252615586215,
+          "drop_fragment": 0.10176276446397925
+        },
+        "examples": [
+          {
+            "url": "vacomsystems.com/wp-content/uploads/2020/07/online/chase/home",
+            "score": 0.9399587814020616,
+            "steps": [
+              {
+                "move": "pad_tracking",
+                "label": "Add tracking parameters",
+                "url": "vacomsystems.com/wp-content/uploads/2020/07/online/chase/home?utm_source=newsletter&utm_medium=email&utm_campaign=autumn",
+                "score": 0.16613095238095232,
+                "price": 1
+              }
+            ]
+          },
+          {
+            "url": "alphacon.co.id/loggers/kazhank/drpsze/ms.php",
+            "score": 0.922137408908062,
+            "steps": [
+              {
+                "move": "pad_tracking",
+                "label": "Add tracking parameters",
+                "url": "alphacon.co.id/loggers/kazhank/drpsze/ms.php?utm_source=newsletter&utm_medium=email&utm_campaign=autumn",
+                "score": 0.17666666666666667,
+                "price": 1
+              }
+            ]
+          },
+          {
+            "url": "villahidalgoysugente.com/education/resFolder/",
+            "score": 0.6951508143682881,
+            "steps": [
+              {
+                "move": "pad_tracking",
+                "label": "Add tracking parameters",
+                "url": "villahidalgoysugente.com/education/resFolder/?utm_source=partner&utm_medium=referral",
+                "score": 0.12880494718584456,
+                "price": 1
+              }
+            ]
+          },
+          {
+            "url": "support10000.mixh.jp/login/account/app/captcha",
+            "score": 0.8758034002347577,
+            "steps": [
+              {
+                "move": "pad_tracking",
+                "label": "Add tracking parameters",
+                "url": "support10000.mixh.jp/login/account/app/captcha?utm_source=newsletter&utm_medium=email&utm_campaign=autumn",
+                "score": 0.2136547619047619,
+                "price": 1
+              }
+            ]
+          }
+        ],
+        "seconds": 64.5
+      }
+    },
+    "no_query": {
+      "description": "Also score the URL without its query string and fragment; keep the higher score.",
+      "views_per_url": 1.2102,
+      "thresholds": {
+        "default": 0.5,
+        "max_f1": 0.43554335314375486,
+        "low_fpr": 0.8181236804303738,
+        "low_fpr_target": 0.01
+      },
+      "validation": {
+        "balanced": {
+          "n": 155612,
+          "threshold": 0.43554335314375486,
+          "accuracy": 0.8900084826363005,
+          "precision": 0.8784785344707033,
+          "recall": 0.8317775571002979,
+          "f1": 0.8544904274492467,
+          "false_positive_rate": 0.07303134717203126,
+          "roc_auc": 0.9442777814765226,
+          "pr_auc": 0.9343778581442104,
+          "tn": 88240,
+          "fp": 6952,
+          "fn": 10164,
+          "tp": 50256
+        },
+        "strict": {
+          "n": 155612,
+          "threshold": 0.8181236804303738,
+          "accuracy": 0.8532246870421304,
+          "precision": 0.9759854088560138,
+          "recall": 0.6376696458126448,
+          "f1": 0.7713622167053736,
+          "false_positive_rate": 0.009958820068913354,
+          "roc_auc": 0.9442777814765226,
+          "pr_auc": 0.9343778581442104,
+          "tn": 94244,
+          "fp": 948,
+          "fn": 21892,
+          "tp": 38528
+        },
+        "default": {
+          "n": 155612,
+          "threshold": 0.5,
+          "accuracy": 0.8912358944040305,
+          "precision": 0.9004400743891436,
+          "recall": 0.809367759020192,
+          "f1": 0.852478449215107,
+          "false_positive_rate": 0.05680099167997311,
+          "roc_auc": 0.9442777814765226,
+          "pr_auc": 0.9343778581442104,
+          "tn": 89785,
+          "fp": 5407,
+          "fn": 11518,
+          "tp": 48902
+        }
+      },
+      "external_unseen": {
+        "balanced": {
+          "n": 5839,
+          "threshold": 0.43554335314375486,
+          "accuracy": 0.870525774961466,
+          "precision": 0.7737321196358907,
+          "recall": 0.8841010401188707,
+          "f1": 0.8252427184466018,
+          "false_positive_rate": 0.13664921465968585,
+          "roc_auc": 0.9419173609868552,
+          "pr_auc": 0.8988403387257176,
+          "tn": 3298,
+          "fp": 522,
+          "fn": 234,
+          "tp": 1785
+        },
+        "strict": {
+          "n": 5839,
+          "threshold": 0.8181236804303738,
+          "accuracy": 0.8116115773248844,
+          "precision": 0.9338999055712937,
+          "recall": 0.4898464586428925,
+          "f1": 0.6426250812215725,
+          "false_positive_rate": 0.01832460732984293,
+          "roc_auc": 0.9419173609868552,
+          "pr_auc": 0.8988403387257176,
+          "tn": 3750,
+          "fp": 70,
+          "fn": 1030,
+          "tp": 989
+        },
+        "default": {
+          "n": 5839,
+          "threshold": 0.5,
+          "accuracy": 0.8799451960952218,
+          "precision": 0.8088097469540768,
+          "recall": 0.854878652798415,
+          "f1": 0.8312063568504695,
+          "false_positive_rate": 0.1068062827225131,
+          "roc_auc": 0.9419173609868552,
+          "pr_auc": 0.8988403387257176,
+          "tn": 3412,
+          "fp": 408,
+          "fn": 293,
+          "tp": 1726
+        }
+      },
+      "attack": {
+        "cut_off": 0.43554335314375486,
+        "sample": 400,
+        "caught_before_attack": 356,
+        "evaded_within_price": {
+          "1": 0.26685393258426965,
+          "2": 0.5280898876404494,
+          "3": 0.6797752808988764,
+          "4": 0.800561797752809,
+          "5": 0.8848314606741573,
+          "6": 0.9325842696629213
+        },
+        "attacker_success_within_price": {
+          "0": 0.11,
+          "1": 0.3475,
+          "2": 0.58,
+          "3": 0.715,
+          "4": 0.8225,
+          "5": 0.8975,
+          "6": 0.94
+        },
+        "never_evaded_within_max_price": 0.06741573033707865,
+        "mean_price_when_evaded": 2.61144578313253,
+        "moves_in_cheapest_paths": {
+          "trim_path": 224,
+          "pad_path_suffix": 157,
+          "pad_path": 116,
+          "drop_subdomains": 50,
+          "drop_path_word": 47,
+          "shorten_token": 33,
+          "swap_tld": 32,
+          "pad_tracking": 21,
+          "ip_to_name": 13,
+          "drop_extension": 10,
+          "drop_query": 9,
+          "drop_host_word": 3,
+          "plain_name": 2
+        },
+        "mean_single_move_change": {
+          "ip_to_name": -0.5195532806582771,
+          "drop_subdomains": -0.29723903005329466,
+          "drop_host_word": -0.19425909925466076,
+          "pad_path": -0.1865430501901859,
+          "pad_path_suffix": -0.18034742134665732,
+          "swap_tld": -0.12099008472638598,
+          "drop_path_word": -0.09846990240527885,
+          "trim_path": -0.06312002310525543,
+          "shorten_token": -0.062380707606982715,
+          "plain_name": -0.035797298349408334,
+          "drop_query": -0.024183225370994432,
+          "drop_extension": -0.023856658050333625,
+          "lowercase_path": -0.011680313349681034,
+          "pad_tracking": -0.005422329981524071,
+          "drop_fragment": 0.0
+        },
+        "examples": [
+          {
+            "url": "vacomsystems.com/wp-content/uploads/2020/07/online/chase/home",
+            "score": 0.9399587814020616,
+            "steps": [
+              {
+                "move": "trim_path",
+                "label": "Remove a folder from the path",
+                "url": "vacomsystems.com/wp-content/2020/07/online/chase/home",
+                "score": 0.8762161839683981,
+                "price": 1
+              },
+              {
+                "move": "trim_path",
+                "label": "Remove a folder from the path",
+                "url": "vacomsystems.com/2020/07/online/chase/home",
+                "score": 0.575886082571593,
+                "price": 1
+              },
+              {
+                "move": "trim_path",
+                "label": "Remove a folder from the path",
+                "url": "vacomsystems.com/2020/07/chase/home",
+                "score": 0.17365049304292735,
+                "price": 1
+              }
+            ]
+          },
+          {
+            "url": "alphacon.co.id/loggers/kazhank/drpsze/ms.php",
+            "score": 0.922137408908062,
+            "steps": [
+              {
+                "move": "swap_tld",
+                "label": "Move to a mainstream ending",
+                "url": "alphacon.org/loggers/kazhank/drpsze/ms.php",
+                "score": 0.698859478240519,
+                "price": 2
+              },
+              {
+                "move": "drop_extension",
+                "label": "Hide the file extension",
+                "url": "alphacon.org/loggers/kazhank/drpsze/ms",
+                "score": 0.33053318974687856,
+                "price": 1
+              }
+            ]
+          },
+          {
+            "url": "villahidalgoysugente.com/education/resFolder/",
+            "score": 0.6951508143682881,
+            "steps": [
+              {
+                "move": "pad_path_suffix",
+                "label": "Add ordinary folders after the page",
+                "url": "villahidalgoysugente.com/education/resFolder/blog/2024",
+                "score": 0.32232844100776603,
+                "price": 1
+              }
+            ]
+          },
+          {
+            "url": "support10000.mixh.jp/login/account/app/captcha",
+            "score": 0.8758034002347577,
+            "steps": [
+              {
+                "move": "drop_subdomains",
+                "label": "Remove the subdomain",
+                "url": "mixh.jp/login/account/app/captcha",
+                "score": 0.6122225804387128,
+                "price": 3
+              },
+              {
+                "move": "drop_path_word",
+                "label": "Rename a bait word in the path",
+                "url": "mixh.jp/login//app/captcha",
+                "score": 0.5643867370583489,
+                "price": 1
+              },
+              {
+                "move": "pad_path_suffix",
+                "label": "Add ordinary folders after the page",
+                "url": "mixh.jp/login//app/captcha/blog/2024",
+                "score": 0.368630823280572,
+                "price": 1
+              }
+            ]
+          }
+        ],
+        "seconds": 121.8
+      }
+    },
+    "multi_view": {
+      "description": "Also score the URL without its query, and the host with each of its longest folders on its own; keep the highest score.",
+      "views_per_url": 2.76665,
+      "thresholds": {
+        "default": 0.5,
+        "max_f1": 0.5341036642796435,
+        "low_fpr": 0.8399453343837535,
+        "low_fpr_target": 0.01
+      },
+      "validation": {
+        "balanced": {
+          "n": 155612,
+          "threshold": 0.5341036642796435,
+          "accuracy": 0.8799064339511091,
+          "precision": 0.8691790516631281,
+          "recall": 0.8130751406818935,
+          "f1": 0.8401915512228494,
+          "false_positive_rate": 0.07767459450373981,
+          "roc_auc": 0.9288441476205765,
+          "pr_auc": 0.9210395303478397,
+          "tn": 87798,
+          "fp": 7394,
+          "fn": 11294,
+          "tp": 49126
+        },
+        "strict": {
+          "n": 155612,
+          "threshold": 0.8399453343837535,
+          "accuracy": 0.846123692260237,
+          "precision": 0.9752195325325065,
+          "recall": 0.619430652101953,
+          "f1": 0.7576343411237184,
+          "false_positive_rate": 0.009990335322295991,
+          "roc_auc": 0.9288441476205765,
+          "pr_auc": 0.9210395303478397,
+          "tn": 94241,
+          "fp": 951,
+          "fn": 22994,
+          "tp": 37426
+        },
+        "default": {
+          "n": 155612,
+          "threshold": 0.5,
+          "accuracy": 0.875902886666838,
+          "precision": 0.8517016580257687,
+          "recall": 0.8238331678252234,
+          "f1": 0.8375356502864643,
+          "false_positive_rate": 0.09104756702243887,
+          "roc_auc": 0.9288441476205765,
+          "pr_auc": 0.9210395303478397,
+          "tn": 86525,
+          "fp": 8667,
+          "fn": 10644,
+          "tp": 49776
+        }
+      },
+      "external_unseen": {
+        "balanced": {
+          "n": 5839,
+          "threshold": 0.5341036642796435,
+          "accuracy": 0.872923445795513,
+          "precision": 0.7900954111767379,
+          "recall": 0.8613174839029223,
+          "f1": 0.8241706161137441,
+          "false_positive_rate": 0.12094240837696335,
+          "roc_auc": 0.9397267840333584,
+          "pr_auc": 0.8971104920650604,
+          "tn": 3358,
+          "fp": 462,
+          "fn": 280,
+          "tp": 1739
+        },
+        "strict": {
+          "n": 5839,
+          "threshold": 0.8399453343837535,
+          "accuracy": 0.8160643945881144,
+          "precision": 0.93790546802595,
+          "recall": 0.5012382367508668,
+          "f1": 0.6533247256294383,
+          "false_positive_rate": 0.017539267015706805,
+          "roc_auc": 0.9397267840333584,
+          "pr_auc": 0.8971104920650604,
+          "tn": 3753,
+          "fp": 67,
+          "fn": 1007,
+          "tp": 1012
+        },
+        "default": {
+          "n": 5839,
+          "threshold": 0.5,
+          "accuracy": 0.8671005309128276,
+          "precision": 0.7698653929656969,
+          "recall": 0.8781575037147102,
+          "f1": 0.8204534937528922,
+          "false_positive_rate": 0.1387434554973822,
+          "roc_auc": 0.9397267840333584,
+          "pr_auc": 0.8971104920650604,
+          "tn": 3290,
+          "fp": 530,
+          "fn": 246,
+          "tp": 1773
+        }
+      },
+      "attack": {
+        "cut_off": 0.5341036642796435,
+        "sample": 400,
+        "caught_before_attack": 350,
+        "evaded_within_price": {
+          "1": 0.11142857142857143,
+          "2": 0.3314285714285714,
+          "3": 0.5685714285714286,
+          "4": 0.6885714285714286,
+          "5": 0.82,
+          "6": 0.8514285714285714
+        },
+        "attacker_success_within_price": {
+          "0": 0.125,
+          "1": 0.2225,
+          "2": 0.415,
+          "3": 0.6225,
+          "4": 0.7275,
+          "5": 0.8425,
+          "6": 0.87
+        },
+        "never_evaded_within_max_price": 0.14857142857142858,
+        "mean_price_when_evaded": 3.040268456375839,
+        "moves_in_cheapest_paths": {
+          "trim_path": 229,
+          "drop_subdomains": 75,
+          "swap_tld": 74,
+          "drop_path_word": 69,
+          "pad_path_suffix": 53,
+          "pad_path": 47,
+          "shorten_token": 32,
+          "drop_extension": 29,
+          "ip_to_name": 13,
+          "pad_tracking": 11,
+          "drop_host_word": 9,
+          "plain_name": 6,
+          "drop_query": 4,
+          "lowercase_path": 3
+        },
+        "mean_single_move_change": {
+          "ip_to_name": -0.5000001305870154,
+          "drop_subdomains": -0.28894426933315226,
+          "drop_host_word": -0.19425909925466076,
+          "swap_tld": -0.12254200890507279,
+          "drop_path_word": -0.08705462813752088,
+          "shorten_token": -0.06079442502231658,
+          "trim_path": -0.059530568872452144,
+          "pad_path": -0.03920734323311935,
+          "pad_path_suffix": -0.0382176072285709,
+          "plain_name": -0.03385447472015891,
+          "drop_extension": -0.02175081543520583,
+          "drop_query": -0.019208942915412842,
+          "lowercase_path": -0.007418107836014018,
+          "pad_tracking": -0.004268539974700618,
+          "drop_fragment": 0.0
+        },
+        "examples": [
+          {
+            "url": "vacomsystems.com/wp-content/uploads/2020/07/online/chase/home",
+            "score": 0.9399587814020616,
+            "steps": [
+              {
+                "move": "trim_path",
+                "label": "Remove a folder from the path",
+                "url": "vacomsystems.com/wp-content/2020/07/online/chase/home",
+                "score": 0.8762161839683981,
+                "price": 1
+              },
+              {
+                "move": "trim_path",
+                "label": "Remove a folder from the path",
+                "url": "vacomsystems.com/2020/07/online/chase/home",
+                "score": 0.575886082571593,
+                "price": 1
+              },
+              {
+                "move": "trim_path",
+                "label": "Remove a folder from the path",
+                "url": "vacomsystems.com/2020/07/chase/home",
+                "score": 0.5687439597910647,
+                "price": 1
+              },
+              {
+                "move": "trim_path",
+                "label": "Remove a folder from the path",
+                "url": "vacomsystems.com/2020/07/home",
+                "score": 0.4688587792403203,
+                "price": 1
+              }
+            ]
+          },
+          {
+            "url": "alphacon.co.id/loggers/kazhank/drpsze/ms.php",
+            "score": 0.922137408908062,
+            "steps": [
+              {
+                "move": "swap_tld",
+                "label": "Move to a mainstream ending",
+                "url": "alphacon.org/loggers/kazhank/drpsze/ms.php",
+                "score": 0.698859478240519,
+                "price": 2
+              },
+              {
+                "move": "drop_extension",
+                "label": "Hide the file extension",
+                "url": "alphacon.org/loggers/kazhank/drpsze/ms",
+                "score": 0.4245041621637219,
+                "price": 1
+              }
+            ]
+          },
+          {
+            "url": "villahidalgoysugente.com/education/resFolder/",
+            "score": 0.6951508143682881,
+            "steps": [
+              {
+                "move": "pad_path",
+                "label": "Add an ordinary-looking folder",
+                "url": "villahidalgoysugente.com/blog/2024/education/resFolder/",
+                "score": 0.5234103997517959,
+                "price": 1
+              }
+            ]
+          },
+          {
+            "url": "support10000.mixh.jp/login/account/app/captcha",
+            "score": 0.8758034002347577,
+            "steps": [
+              {
+                "move": "drop_subdomains",
+                "label": "Remove the subdomain",
+                "url": "mixh.jp/login/account/app/captcha",
+                "score": 0.6122225804387128,
+                "price": 3
+              },
+              {
+                "move": "drop_path_word",
+                "label": "Rename a bait word in the path",
+                "url": "mixh.jp/login//app/captcha",
+                "score": 0.5643867370583489,
+                "price": 1
+              },
+              {
+                "move": "drop_path_word",
+                "label": "Rename a bait word in the path",
+                "url": "mixh.jp///app/captcha",
+                "score": 0.43450254766610064,
+                "price": 1
+              }
+            ]
+          }
+        ],
+        "seconds": 162.8
+      }
+    }
+  },
+  "external": {
+    "dataset": "Hannousse & Yahiouche (2021), sites unseen in training",
+    "rows": 5839,
+    "malicious": 2019,
+    "attack_sample": 400
+  },
+  "lookalike": {
+    "external_unseen": {
+      "benign_flagged": 0.0002617801047120419,
+      "malicious_flagged": 0.02674591381872214,
+      "malicious_missed_by_model": 229,
+      "of_those_flagged_by_lookalike": 3,
+      "techniques_on_malicious": {
+        "typo": 3,
+        "subdomain": 46,
+        "combo": 5
+      }
+    },
+    "validation": {
+      "benign_flagged": 0.005693755777796453,
+      "malicious_flagged": 0.026828864614366104,
+      "rows": 155612,
+      "benign_labelled_examples": [
+        "help.paypal.com.cgi.bin.webscr.cmd.login.submit.dispatch.c13c0dn63663d3faee8db2b24f7ld6c338b1d9d702-00-3368861018.27013.hosting105.com/login",
+        "paypal.ca.9483.secure9a.mx/images/cgi.bin/ca/web.scr/?cmnd=_lg&nav=f4c09de695c80fee8587f7e0bc5724e0",
+        "www786.paypal.ca.83387.securessl-610.mx/js/web.apps/ca/m.pp/?cmnd=_lg&action=_edit",
+        "paypal.com.cgi-bin.webscr-cmd--login-submit-dispatch-5885d80a13c0db1f8e263663d3f.issacharministry.org.au/en/Paypal.com/1/paypal/",
+        "paypal.com.us.cgi-bin.webscr-cmd.login-run.dispatch.cpnfirmed5885d80a13c0db1f8e263663d3faee8d43b1bb6ca6ed6aee8d.confirmed22.info.numebr19738",
+        "www919.paypal.co.uk.48542.ssl-430.mx/js/webapps/uk/mpp/?cmnd=_lg&pageName=_edit",
+        "paypal.com-us.cgi.bi.n.webscr-cmd.74fgh.ghs68g484iky4mn86we8.r46d4h38df4b83m48hg3.inmelbournearea.com",
+        "paypal.com.cgi-bin.webscr.cmd.login.submit.confirm-login.paypal.com.security.confirm-update.verify.account.logon.paypal.account-update.prote",
+        "paypal.com-us.cgi-bin.webscr-cmd-login-done-login.access-1308616875.paypal.com-us.cgi-bin.webscr-cmd-login-done-login.access-1308616875.cola",
+        "paypal.com.cgi-bin.webscr-cmd--login-submit-dispatch-5885d80a13c0db1f8e263663d3f.issacharministry.org.au/en/Paypal.com/1/paypal/bbc974c494d4",
+        "update.paypal-com.us.rhrtne2i2v84pc7sc8w4wnrlbgeniqfnjjuubjy8fezptqoxuwf7bv2fxwth.nicosysmdp.com.ar/Limit-id=653252/security/",
+        "update.costumer-billing.secure.paypal.activation.dispatched.url.cgi.bin.booster-pc.fr/d786b22f8121a2a68307c8e6d1822fba/"
+      ]
+    }
+  },
+  "evaluated_at": "2026-11-24 17:19:35",
+  "minutes": 14.6
+}
