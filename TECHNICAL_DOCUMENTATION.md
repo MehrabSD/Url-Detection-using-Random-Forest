@@ -616,6 +616,64 @@ worth reading — most are plainly phishing that the source dataset labelled ben
 `www786.paypal.ca.83387.securessl-610.mx/js/web.apps/ca/m.pp/?cmnd=_lg&action=_edit`. The rule
 layer thereby doubles as a **label-noise detector** for the training data (limitation 4).
 
+### 9.8 Experiment: stacking a gradient-boosted model on the forest (`stacking_experiment.py`)
+
+**The idea.** *Stacking with passthrough*: give a gradient-boosting model the 56 usual features
+plus the random forest's own score as a 57th column, so it can spend its trees correcting the
+rows where the forest is wrong. On training rows that column must be *out-of-fold*, or the
+booster would learn to trust a score that has seen the answer. The training buckets 3–9 are
+already site-disjoint folds, so for each bucket a forest with the final settings was fitted on
+the other six and scored it; validation and external rows get the saved model's score, as a new
+URL would.
+
+**The comparison**, all on the same 56 features and split:
+
+- **Random forest** — the saved model.
+- **Gradient boosting alone** — scikit-learn's `HistGradientBoostingClassifier` (the LightGBM
+  algorithm; LightGBM and XGBoost are not installed), 63 leaves, learning rate 0.1.
+- **Average** — the mean of the two scores, with nothing learned.
+- **Stacking** — the booster on the 56 features plus the out-of-fold forest score.
+
+**Kept honest.** The test buckets are not read at all (they are used once, by `train.py`). The
+validation sites were split in two *by site*: half A (74,598 URLs) chose the number of
+boosting rounds (550 alone, 250 stacked, picked by PR-AUC)
+and every model's cut-offs; half B (81,014 URLs) and the external dataset (5,839 URLs
+from sites unseen in training, section 9.4) report the results.
+
+| Model | Val-B PR-AUC | Val-B ROC-AUC | Val-B F1 | Val-B recall at ≤ 1 % false alarms | External PR-AUC | External ROC-AUC | External F1 | External false alarms | External strict recall |
+|---|---|---|---|---|---|---|---|---|---|
+| Random forest (saved model) | 0.9469 | 0.9531 | 0.8715 | 0.658 | 0.8955 | 0.9405 | 0.8215 | 14.0 % | 0.497 |
+| Gradient boosting alone | 0.9523 | 0.9577 | 0.8774 | 0.696 | 0.9019 | 0.9378 | 0.8165 | 13.2 % | 0.555 |
+| Average of the two | 0.9514 | 0.9570 | 0.8783 | 0.685 | 0.9036 | 0.9421 | 0.8233 | 14.3 % | 0.556 |
+| Stacking (forest score + features) | 0.9525 | 0.9577 | 0.8789 | 0.698 | 0.8950 | 0.9357 | 0.8141 | 14.5 % | 0.553 |
+
+**What it shows.**
+
+1. On the validation sites, stacking scores highest, but **gradient boosting alone captures
+   almost all of the gain** (PR-AUC 0.9523 against
+   0.9525). The out-of-fold forest column adds next to
+   nothing, because the booster already reads the same 56 features the forest learned from.
+2. On the external dataset, collected by other people, **stacking is the weakest of the four**
+   (PR-AUC 0.8950, ROC-AUC
+   0.9357): the second layer fits the training
+   distribution more closely, and that transfers worse.
+3. The **plain average** is the most robust: best on the external dataset on PR-AUC
+   (0.9036), ROC-AUC
+   (0.9421) and F1
+   (0.8233), and within 0.001 of the best F1 on
+   validation. Averaging two different kinds of tree ensemble reduces variance without learning
+   anything new to overfit.
+4. Every booster variant raises recall at the strict ≤ 1 % false-alarm setting on validation, by
+   2.7 (average) to 4.0 (stacking) points: the clearest real gain on offer.
+
+**Decision.** Stacking was **not adopted**. The gains are small, the stacked model transfers
+worse, and replacing the forest would break what the project is built on: the exact per-feature
+explanation and the tree vote on the page (section 15.10) are defined for a random forest, and
+every result in sections 9–9.7, including the red team, describes it. The forest + booster
+average is the candidate worth adopting later (listed in section 11), through `train.py` so the
+test buckets are still read once. Numbers: `reports/stacking.json`; the run took
+16.6 minutes.
+
 ## 10. Limitations
 
 1. **False alarms on legitimate login and shopping pages.** In a spot check the model flagged
@@ -657,7 +715,9 @@ layer thereby doubles as a **label-noise detector** for the training data (limit
   certificate details.
 - Probability calibration (isotonic regression on the validation part).
 - Clean the Kaggle phishing labels, or down-weight that subset.
-- Compare with gradient-boosted trees (LightGBM, XGBoost) on the same features and split.
+- Adopt the **forest + gradient-boosting average** (section 9.8: best on the external dataset,
+  +2.7 points of strict-mode recall on validation) through `train.py`, and extend the page's
+  explanation to the boosted half. Stacking was tried and is not recommended.
 - A four-class version (benign / phishing / malware / defacement) using the Kaggle labels.
 - A character-level neural model (CNN over the URL) as a comparison, on the same site split.
 - Shrink the model for serving: 100 trees score the same on validation (section 8.2) at half
@@ -747,6 +807,7 @@ Mini project/
 │   ├── lookalike.py            brand-impersonation rules
 │   ├── triage.py               finds and ranks every link in a message
 │   ├── compact_forest.py     the forest as flat arrays, for serving -> models/*.npz
+│   ├── stacking_experiment.py  experiment: boosting / stacking vs the forest -> reports/stacking.json
 │   ├── predict.py            score URLs (CLI + UrlClassifier class)
 │   ├── serve.py              demo web server
 │   ├── explain.py              explains one prediction for the page
@@ -759,7 +820,7 @@ Mini project/
 ├── render.yaml               Render Blueprint (free hosting)
 ├── data/                     raw + processed data (git-ignored; re-creatable)
 ├── models/                   the trained model (.joblib, git-ignored) and its compact copy (.npz)
-└── reports/                  metrics.json, external_eval.json, red_team.json, figures/
+└── reports/                  metrics.json, external_eval.json, red_team.json, stacking.json, figures/
 ```
 
 The flow is strictly one-way, and each step only reads what earlier steps wrote:
@@ -1225,6 +1286,7 @@ parameters, and the SHA-256 of the `.joblib` it came from): 40 MB instead of 88 
 | Beam search over edits | gradient attacks, random mutation | forests have no gradient; random mutation wastes queries; meaningful edits keep every example deployable |
 | Defence at scoring time (max over views) | retrain on attacked examples | no retraining, model file unchanged, measurable in minutes; adversarial training is listed as an improvement |
 | Attack the external dataset | attack the test buckets | the test buckets are used once, by train.py |
+| Keep the random forest | stack a gradient-boosted model on it | measured in section 9.8: no gain over boosting alone and worse on the external dataset; the forest keeps exact explanations |
 | Lookalike as a separate layer | add it as a model feature | precise rules for a rare pattern; kept out of the score so the model's results stay exactly as measured |
 | QR decoded in the browser | upload the image | the image never leaves the visitor's machine; only the decoded text is scored |
 | Serve a compact copy of the forest | a smaller model (100 trees), a paid host | identical predictions and every reported number stays valid; fits a free 512 MB plan |
@@ -1851,6 +1913,14 @@ message checker. Showing a weakness, its cause and its fix lands far better than
     10⁻¹². The server now peaks at 316 MB and runs on Render's free plan. Key detail:
     thresholds stay float64, because scikit-learn compares float32 inputs to float64 splits.
 
+36. *Did you try stacking or gradient boosting?* — Yes (section 9.8). Stacking with
+    passthrough — a booster on the features plus an out-of-fold forest score, folds grouped by
+    site — gave the best validation PR-AUC (0.9525 against the
+    forest's 0.9469), but the booster alone got almost the same,
+    and on the external dataset stacking was the worst of four models. The plain average of
+    forest and booster was the most robust. So I kept the forest and recorded the result: a
+    technique that looks good on in-distribution validation can transfer worse.
+
 **System design follow-up** — *"Design a link scanner for an email service."* Pipeline:
 extract URLs → normalise → allow-list / cache lookup → blocklist → this lexical model (fast,
 every link) → for the uncertain band, a slower check (sandboxed fetch, page content,
@@ -1861,7 +1931,8 @@ Discuss latency budget, false-positive cost, drift monitoring and adversaries ad
 
 - Bias–variance trade-off; overfitting and regularisation in trees.
 - Decision trees: Gini, entropy, information gain, pruning, depth and leaf-size limits.
-- Ensembles: bagging, random forests, boosting (AdaBoost, gradient boosting, XGBoost).
+- Ensembles: bagging, random forests, boosting (AdaBoost, gradient boosting, XGBoost,
+  LightGBM / histogram boosting), blending and stacking with out-of-fold predictions.
 - Naive Bayes and Laplace smoothing; log-odds.
 - Confusion matrix; precision, recall, F1, ROC and PR curves, AUC; threshold tuning.
 - Cross-validation, group k-fold, stratification, train/validation/test roles.
@@ -1991,6 +2062,8 @@ value after `=`), `has_fragment`.
 | Punycode | the ASCII encoding (`xn--…`) of an international domain name |
 | Damerau-Levenshtein distance | edits (insert, delete, change, swap neighbours) needed to turn one string into another |
 | Defanging | writing a live link so it cannot be clicked (`hxxp://evil[.]com`) |
+| Stacking | training a second model on the first model's (out-of-fold) predictions, here together with the original features ("passthrough") |
+| Blending / averaging | combining models by averaging their scores, with no second model |
 | Quishing | phishing through a QR code |
 
 ## Appendix D. Tools used during development
@@ -2018,6 +2091,7 @@ once, outside the project, to generate a test image.
 | 2026-11-24 | **Red team and defences.** Added `adversary.py` (beam-search attacker over 15 priced edits), `hardening.py` (multi-view scorer) and `red_team.py` → `reports/red_team.json`: on 400 external phishing URLs from unseen sites, one free edit evades the model as trained 82.1 % of the time and the hardened scorer 11.1 %; hardened cut-offs chosen on validation (balanced 0.534, strict 0.840). Added `lookalike.py` (brand impersonation rules, measured at 0.03 % benign flags externally) and `triage.py` (links in a message: refanging, hidden targets). New sections 9.5–9.7, 15.11–15.14, limitations 10–11, interview questions 27–34 (35 added with free hosting). Demo: lookalike panel, QR reader (jsQR vendored), *Try to sneak it past the model*, *Check a whole message* with CSV, robustness report; new endpoints `/api/attack`, `/api/triage`; `predict.py --hardened`; two new figures. Dockerfile and upload script copy `red_team.json` (38 files). Tests 17 → 34. The trained model, its features, its thresholds and every result in sections 1–9.4 are untouched. |
 | 2026-11-24 | **Free hosting.** Hugging Face now requires PRO for Docker Spaces (upload refused with 402). Added `compact_forest.py`: the forest as flat arrays (`models/malicious_url_rf.npz`, 40 MB, no pickle) with a vectorised traversal; identical to `predict_proba` within 10⁻¹² (7.8 × 10⁻¹⁶ measured on 20,000 URLs). `serve.py` serves it when its SHA-256 matches the `.joblib`; `train.py` writes it after saving; `explain.py` walks it. pandas imported lazily in `learned_features.py` and dropped from `requirements-serve.txt`. Measured server peak 316 MB (was ~940 MB). Added `render.yaml`; the Dockerfile ships the `.npz` instead of the `.joblib`; the upload script checks it is current (39 files, 41 MB). Section 19 rewritten for Render; new section 15.15; `tests/test_compact.py` (tests 34 → 39). Model, thresholds and all results untouched. |
 | 2026-11-24 | Demo live at https://malicious-url-detector-33wl.onrender.com. The page header no longer shows the training date (it still comes back from `/api/state`). |
+| 2026-11-24 | **Stacking experiment** (section 9.8, `stacking_experiment.py` → `reports/stacking.json`): gradient boosting alone, a forest + booster average and stacking with passthrough (out-of-fold forest score by site bucket), tuned on half the validation sites, reported on the other half and the external dataset; test buckets not read. Stacking not adopted (best validation PR-AUC 0.9525 vs forest 0.9469, but booster alone 0.9523, and worst externally); the average listed as the next improvement. Interview question 36. The saved model and all earlier results unchanged. |
 | 2026-11-24 | Documented the deployment as done: live and repository links at the top and in sections 1, 19.5 and 21; GitHub and Render accounts in section 12.1; train.py writing the compact model (step 4); the compact model in the architecture (17.2); how memory was measured and the Windows launcher pitfall, and the checks run against the live site (18); Render's Blueprint path and the `x-render-routing: no-server` diagnosis of the suffixed address (19.3); three troubleshooting rows; tools used. No code or result changed. |
 
 ## References

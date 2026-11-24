@@ -24,6 +24,8 @@
   `deploy/push_to_hf_space.py` uploads it to a Hugging Face Space. If `serve.py` starts
   reading a new file, add it to the Dockerfile's COPY lines and to `FIXED_FILES` in that script.
   Keep `scikit-learn` in `requirements-serve.txt` equal to the version that saved the model.
+- `src/stacking_experiment.py` -> `reports/stacking.json`: boosting / averaging / stacking vs the
+  forest (validation halves + external data; never the test buckets). Stacking was not adopted.
 - `src/compact_forest.py` -> `models/malicious_url_rf.npz`: the forest as flat arrays, which
   the server and the container use (fits Render's free 512 MB; `render.yaml`). train.py writes
   it; after replacing the .joblib any other way, run it by hand. It must stay committed to git
