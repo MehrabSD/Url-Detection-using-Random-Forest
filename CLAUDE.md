@@ -40,7 +40,7 @@
 Use the project venv: `.venv\Scripts\python.exe src\<script>.py`.
 Demo page: `.venv\Scripts\python.exe src\serve.py` (restart it after editing a `src/` file).
 Full rebuild order: download_data -> prepare_data -> train -> evaluate_external -> red_team ->
-make_figures (about 30 min total).
+make_figures (about 45 min on a quiet machine: ~25 train, ~15 red_team).
 
 ## Rules for this project
 - **Keep `TECHNICAL_DOCUMENTATION.md` in sync.** Any change to features, data cleaning, the

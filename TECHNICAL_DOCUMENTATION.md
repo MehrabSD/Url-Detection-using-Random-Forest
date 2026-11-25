@@ -8,18 +8,38 @@ labelled as measurements.*
 - **Live demo:** https://malicious-url-detector-33wl.onrender.com (free plan; the first visit after a quiet spell takes about a minute)
 - **Source code:** https://github.com/MehrabSD/Url-Detection-using-Random-Forest
 
+**Abstract.** Malicious links — phishing pages, malware downloads, defaced sites — are the
+most common way attacks reach people, and blocklists only know links that have already been
+reported. This project builds a detector that judges a link from its text alone, without
+visiting it. 1,654,727 unique URLs from three public datasets were cleaned of two collection
+artifacts that give the labels away, and turned into 56 features: 53 measured from the URL
+string and 3 learned from the training labels (character n-gram Naive Bayes scores and a
+smoothed TLD risk rate, computed out-of-fold to avoid leakage). The model averages a random
+forest (200 trees) with a histogram gradient-boosted model (600 rounds). Evaluated on 139,996
+websites that never appeared in training — a site-disjoint split, because a random split was
+shown to inflate F1 by 12 points — it reaches 88.7 % accuracy, F1 0.830 and ROC-AUC 0.946, and
+ROC-AUC 0.942 on a fourth dataset collected by other researchers. The project then attacks its
+own model: a beam search over realistic, priced URL edits got 83.1 % of caught phishing links
+past it with one free edit, traced the weakness to evidence dilution, and a multi-view scoring
+defence cut that to 12.7 % with no retraining. Everything is served by an explainable web demo
+(exact per-feature attributions, live attack, lookalike-domain check, inbox and QR scanning)
+hosted free on Render.
+
 This document has four parts:
 
-- **Part A — What was built and how well it works** (sections 1–11): data, features, model,
-  results, the red-team attack and its fix, limitations. Read this to understand the project.
+- **Part A — What was built and how well it works** (sections 1–11): problem, objectives,
+  data, features, model, results, the red-team attack and its fix, limitations, conclusion.
+  Read this to understand the project.
 - **Part B — Building it from scratch** (sections 12–16): environment, every script in order,
   the algorithms behind them with the key code, and how to check each step worked.
 - **Part C — The demo website and deployment** (sections 17–19): how the page and its server
   work, the API, testing, and putting it online.
-- **Part D — For placements** (sections 20–24): what the project teaches, resume lines, how to
-  pitch it, and interview questions with answers.
+- **Part D — For placements** (sections 20–25): what the project teaches, resume lines, how to
+  pitch it, interview questions with answers, and the key numbers on one page.
 
-Appendices: full feature reference, troubleshooting, glossary, change log, references.
+Appendices: full feature reference, troubleshooting, glossary, tools, every setting in one
+place, what each report file contains, a code reference for every file, all 56 features ranked,
+change log, references.
 
 ## Contents
 
@@ -33,7 +53,7 @@ Appendices: full feature reference, troubleshooting, glossary, change log, refer
 - [8. Model](#8-model)
 - [9. Results on the test sites](#9-results-on-the-test-sites)
 - [10. Limitations](#10-limitations)
-- [11. Possible improvements](#11-possible-improvements)
+- [11. Conclusion and possible improvements](#11-conclusion-and-possible-improvements)
 - [12. Prerequisites and setup](#12-prerequisites-and-setup)
 - [13. Project layout and data flow](#13-project-layout-and-data-flow)
 - [14. Step-by-step build](#14-step-by-step-build)
@@ -47,10 +67,15 @@ Appendices: full feature reference, troubleshooting, glossary, change log, refer
 - [22. Explaining the project in an interview](#22-explaining-the-project-in-an-interview)
 - [23. Interview questions and answers](#23-interview-questions-and-answers)
 - [24. Concepts to revise before an interview](#24-concepts-to-revise-before-an-interview)
+- [25. Key numbers on one page](#25-key-numbers-on-one-page)
 - [Appendix A. Feature reference](#appendix-a-feature-reference)
 - [Appendix B. Troubleshooting](#appendix-b-troubleshooting)
 - [Appendix C. Glossary](#appendix-c-glossary)
 - [Appendix D. Tools used during development](#appendix-d-tools-used-during-development)
+- [Appendix E. Every setting in one place](#appendix-e-every-setting-in-one-place)
+- [Appendix F. What each report file contains](#appendix-f-what-each-report-file-contains)
+- [Appendix G. Code reference](#appendix-g-code-reference)
+- [Appendix H. All 56 features ranked](#appendix-h-all-56-features-ranked)
 - [Change log](#change-log)
 - [References](#references)
 
@@ -105,6 +130,69 @@ held up on both: averaging the forest with a gradient-boosted model. It was adop
 8.3); on the test sites it raised F1 from 0.824 to 0.830 and caught
 66.3 % instead of 63.0 % of malicious URLs in the strict ≤ 1 % false-alarm mode.
 
+### 1.1 Problem statement
+
+Given only the text of a URL, decide whether it is benign or malicious (phishing, malware
+delivery or defacement), quickly enough to check every link in an email or chat message, and
+without contacting the site. The decision must hold up on **websites the model has never
+seen** — the situation a detector is actually used in — and the system must say *why* it
+decided, because a security verdict nobody can check is hard to trust.
+
+Why it matters: blocklists such as Google Safe Browsing only cover links that have been
+reported, while new phishing pages appear constantly and live for hours or days. A text-only
+model complements a blocklist: it is instant, works offline, and never risks loading a
+malicious page.
+
+### 1.2 Objectives and how each was met
+
+| Objective | How it was met | Where |
+|---|---|---|
+| Build a corpus large and varied enough to generalise | three public datasets merged, cleaned and de-duplicated: 1,654,727 URLs, 698,917 sites | sections 3–4 |
+| Measure performance honestly | site-disjoint train / validation / test split; test sites scored once per adopted model; an external fourth dataset | sections 5–6, 9.4 |
+| Engineer features from the URL text alone | 53 lexical features + 3 learned features, computed out-of-fold | section 7 |
+| Train and tune a classifier | random forest (searched on validation) averaged with gradient boosting (rounds chosen on validation); three decision thresholds | section 8 |
+| Beat simple baselines | beats always-benign, a single tree, logistic regression and the forest alone | section 9.1 |
+| Explain every prediction | exact per-feature contributions for the averaged model, unit-tested | section 15.10 |
+| Test robustness against an adaptive attacker (the project's unique part) | beam-search red team over priced edits; multi-view defence measured on validation and external data | sections 9.5–9.6 |
+| Cover what the model cannot see | rule-based lookalike-domain check; inbox triage; QR-code scanning | sections 9.7, 15.13–15.14, 17 |
+| Make it usable by anyone | interactive web demo with an API, deployed free on Render | sections 17, 19 |
+| Make it reproducible | pinned versions, seed 42, scripts that write JSON reports, charts drawn from the reports, 42 automated tests | sections 12–14, 18 |
+
+### 1.3 Scope
+
+**In scope:** binary classification (benign / malicious) of a single URL or every link in a
+message; English-language and international domains; the three decision modes; an
+explanation; an attack simulation; a free public demo.
+
+**Out of scope, by design:** visiting the page, page content or screenshots, WHOIS or DNS
+lookups, certificate checks, reputation services, user accounts and storage of what visitors
+type (the demo stores nothing). Telling phishing from malware from defacement (a four-class
+model is listed as an improvement). Real-time retraining.
+
+### 1.4 Related work
+
+- **Ma, Saul, Savage & Voelker (2009)**, *Beyond Blacklists* (KDD): the classic result that
+  lexical and host-based URL features with a linear model detect malicious sites well beyond
+  what blocklists cover. This project keeps the lexical side and adds learned features and
+  tree ensembles.
+- **Garera, Provos, Chew & Rubin (2007)**: URL structure features (obfuscated hosts, brand words
+  in the wrong place) for phishing — the origin of features such as `brand_outside_domain`.
+- **Sahoo, Liu & Hoi (2017)**, a survey of machine learning for malicious URL detection:
+  lexical, host-based and content features; batch vs online learning. Most results it reviews
+  use random splits, the issue section 5 measures.
+- **Le, Pham, Sahoo & Hoi (2018)**, *URLNet*: character- and word-level CNNs on the URL string.
+  A character model is listed as a comparison to add on the same site split (section 11).
+- **Kaufman, Rosset, Perlich & Stitelman (2012)**, *Leakage in data mining*: the general theory
+  of the leakage found here (same site in train and test; target leakage in learned features).
+- **Lowd & Meek (2005)**, *good-word attacks* on spam filters, and **Biggio & Roli (2018)** on
+  adversarial machine learning: the background for the red team (section 9.5).
+- Datasets: Kaggle "Malicious URLs", **PhiUSIIL** (Prasad & Chandra 2024), a site-aware URL
+  benchmark, and **Hannousse & Yahiouche (2021)** for the external check.
+
+What this project adds to the usual student treatment: it measures and removes the leakage that
+inflates most reported scores, checks on an external dataset with an overlap analysis, explains
+each prediction exactly, and attacks its own model before claiming it works.
+
 ## 2. Pipeline
 
 ```
@@ -130,8 +218,10 @@ Supporting modules: `features.py` (the 53 fixed features), `learned_features.py`
 learned ones), `explain.py` (explains one prediction for the page) and `describe.py` (plain
 labels for the page), plus the four added layers: `adversary.py` (attacker edits and the
 search), `hardening.py` (multi-view scorer), `lookalike.py` (brand-impersonation rules) and
-`triage.py` (finds every link in a message). The whole pipeline takes roughly 30 minutes on a
-16-core laptop with 16 GB RAM (15 for training, 15 for the red team).
+`triage.py` (finds every link in a message). The whole pipeline takes roughly 45 minutes on a
+quiet 16-core laptop with 16 GB RAM (about 25 for training, 15 for the red team, a few for the
+rest); with other programs using the CPU the last run took 67 minutes for training and 34 for
+the red team.
 
 ## 3. Datasets
 
@@ -383,6 +473,32 @@ with the model:
 | `default` | 0.500 | plain majority vote |
 | `strict` | 0.807 | at most 1 % of benign validation URLs flagged |
 
+How each mode scored on the validation sites, where the thresholds were chosen (155,612 URLs;
+ROC-AUC 0.952 and PR-AUC 0.943 for all three):
+
+| Mode | Accuracy | Precision | Recall | F1 | False-positive rate | Caught / missed | Benign flagged |
+|---|---|---|---|---|---|---|---|
+| balanced (0.422) | 0.900 | 0.899 | 0.836 | 0.866 | 6.0 % | 50,512 / 9,908 | 5,704 |
+| default (0.500) | 0.901 | 0.923 | 0.812 | 0.864 | 4.3 % | 49,090 / 11,330 | 4,108 |
+| strict (0.807) | 0.868 | 0.977 | 0.676 | 0.799 | 1.0 % | 40,849 / 19,571 | 951 |
+
+### 8.5 Model card
+
+A short summary in the format used to document published models:
+
+| | |
+|---|---|
+| Model | random forest (scikit-learn `RandomForestClassifier`, 200 trees) averaged with `HistGradientBoostingClassifier` (600 rounds); scikit-learn 1.9.1 |
+| Input | one URL as text; normalised, then 56 numeric features |
+| Output | a score from 0 to 1 (the mean of two probabilities) and a verdict under one of three thresholds |
+| Intended use | a first, fast screen of links in mail, chat or logs, alongside a blocklist; flagging links for a person to review; teaching |
+| Not intended for | blocking links on its own with no allow-list (false alarms on real login pages, limitation 1); judging hacked legitimate sites (limitation 3); reading the score as a probability (limitation 7) |
+| Training data | 1,126,862 URLs from 489,138 sites (buckets 3–9) of three public datasets, 35.7 % malicious |
+| Evaluation data | 372,253 URLs from 139,996 unseen sites (test); 5,839 URLs from 4,052 unseen sites of an external dataset |
+| Headline results | test F1 0.830, ROC-AUC 0.946, PR-AUC 0.924; external F1 0.824, ROC-AUC 0.942 |
+| Known weak spots | Kaggle phishing (40.3 % caught, partly label noise), Joomla URLs, free-hosting subdomains, false alarms that grow on other people's data (13.9 % externally), padding attacks (83.1 % evade with one free edit unless the multi-view scorer is used) |
+| Ethical notes | built only from public datasets under open licences; the demo never fetches a URL and stores nothing; the attack tool only rewrites strings and is meant to measure the model, and every edit it makes is one attackers already use |
+
 ## 9. Results on the test sites
 
 | Mode | Accuracy | Precision | Recall | F1 | False-positive rate |
@@ -464,6 +580,23 @@ All trained on the same rows and features, scored at the 0.5 cut-off on the same
 Malware URLs (raw IPs, executable file names) are easy. Kaggle phishing is the weak spot, and
 much of that is the label noise described in section 3: the most confidently "missed" phishing
 URLs are ordinary articles such as `arstechnica.com/gaming/news/2010/08/...`.
+
+The most confident mistakes on the test sites (`metrics.json` → `test.confident_errors` keeps
+15 of each):
+
+| Kind | Score | Source | URL |
+|---|---|---|---|
+| False alarm | 1.000 | benchmark | `35.240.247.68/mobile` |
+| False alarm | 0.994 | Kaggle | `dos-extreme.si/index.php?option=com_wrapper&view=wrapper&id=44&Itemid=29&lang=en` |
+| False alarm | 0.993 | benchmark | `ekimovka-metod.ru/index.php?option=com_content&view=article&id=558:…` |
+| False alarm | 0.991 | Kaggle | `msn-analizar-index-phploging.blogspot.com` |
+| Missed | 0.001 | Kaggle | `pubyun.com/blog/openstack/rhsummit%e4%b8%8a…` |
+| Missed | 0.001 | Kaggle | `arstechnica.com/gaming/news/2010/08/arkham-horror-may-not-be-easy-but-it-sure-is-great.ars` |
+
+Read as a group they show the limitations of section 10: raw IPs and Joomla
+(`option=com_…`) URLs labelled benign, a "benign" Blogspot name that plainly imitates a login
+page, and "phishing" labels on ordinary blog posts and news articles — label noise the model
+is right to disagree with.
 
 ### 9.3 Feature importance
 
@@ -874,7 +1007,33 @@ was run while the saved model was the forest alone. Numbers:
     average, but the booster's share is rescaled from log-odds to probability by one factor per
     URL (section 15.10) — a convention, like the order-dependence of Saabas attribution itself.
 
-## 11. Possible improvements
+## 11. Conclusion and possible improvements
+
+### 11.1 Conclusion
+
+A malicious-URL detector that reads only the link's text works, but how well depends almost
+entirely on how it is measured. On websites it had never seen, the final model — a random
+forest averaged with a gradient-boosted model over 56 features — reached F1 0.830 and ROC-AUC
+0.946, and held ROC-AUC 0.942 on a dataset collected by other researchers. The same pipeline
+scores F1 0.844 instead of 0.719 on one dataset when sites are allowed to leak across a random
+split, and one raw dataset can be classified at 83.7 % accuracy by a rule that never looks at
+the address. Removing those shortcuts lowered the headline numbers and made them believable.
+
+Three further findings carry beyond this project. First, **features mattered more than the
+choice of model**: the three learned features added 3.6 F1 points, while every model family
+tried on top of them (boosting, stacking, KNN, SVMs) moved F1 by under one point, and only
+averaging two strong, different tree ensembles helped consistently. Second, **a model's test
+score says nothing about an adaptive attacker**: one free, realistic edit beat the model on
+83.1 % of the phishing it caught, because its strongest feature averages its evidence. Third,
+**a defence designed from the cause works without retraining**: scoring several views of the
+URL and keeping the most suspicious cut that to 12.7 %, at a measured, modest cost in false
+alarms on clean data.
+
+The result is a fast, explainable first screen to run beside a blocklist, not a replacement for
+one: it still flags some real login pages, cannot see hacked legitimate sites, and an attacker
+willing to buy new domains still gets through.
+
+### 11.2 Possible improvements
 
 - Add an allow-list / domain-popularity feature (e.g. Tranco rank) to fix limitation 1.
 - Add host-based features where lookups are allowed: domain age (WHOIS), DNS records,
@@ -914,9 +1073,9 @@ choice was made.
 | OS | Windows 11 (commands below are PowerShell) | any; on Linux/macOS use `.venv/bin/python` |
 | Python | 3.12.10 | 3.12 (numpy 2.5 needs ≥ 3.12) |
 | CPU | 16 logical cores | any; training is slower with fewer cores |
-| RAM | 16 GB | 16 GB recommended for `train.py` (not tested on less); about 320 MB for the demo server |
-| Disk | — | `data/` 358 MB (185 MB download + 131 MB processed table) and the 88 MB model, plus the Python packages |
-| GPU | not used | — scikit-learn's random forest runs on the CPU only |
+| RAM | 16 GB | 16 GB recommended for `train.py` (not tested on less); about 304 MB for the demo server |
+| Disk | — | `data/` 358 MB (185 MB download + 131 MB processed table), the 90 MB model and its 41 MB compact copy, plus the Python packages |
+| GPU | not used | — scikit-learn's random forest and histogram gradient boosting run on the CPU only |
 | Network | for `download_data.py`, and `git push` when deploying | the model and the demo never go online to score a URL |
 | Accounts | GitHub and Render (both free) | only to publish the demo (section 19); no card is needed |
 
@@ -938,7 +1097,7 @@ python -m venv .venv                                   # an isolated Python for 
 
 | Package | Version | Used for |
 |---|---|---|
-| scikit-learn | 1.9.1 | random forest, logistic regression, metrics, HashingVectorizer, permutation importance |
+| scikit-learn | 1.9.1 | random forest, histogram gradient boosting, logistic regression, metrics, HashingVectorizer (KNN and SVMs in the experiment of section 9.9) |
 | pandas | 3.1.1 | loading, cleaning and grouping the tables |
 | numpy | 2.5.4 | feature matrices |
 | pyarrow | 26.0.1 | reading/writing Parquet files |
@@ -981,10 +1140,14 @@ Mini project/
 │   └── describe.py             labels for features and modes, example URLs, sample email
 ├── web/                      the demo page: index.html, style.css, app.js, charts.js, util.js,
 │                             lab.js (red team + robustness), inbox.js, qr.js, fonts/, vendor/jsQR.js
-├── tests/                    test_explain.py, test_red_team.py: unit + HTTP tests
+├── tests/                    test_explain.py, test_red_team.py, test_compact.py: 42 unit + HTTP tests
 ├── deploy/                   Hugging Face upload script and Space description
 ├── Dockerfile, .dockerignore, requirements-serve.txt   container for the demo
 ├── render.yaml               Render Blueprint (free hosting)
+├── requirements.txt          pinned packages for the whole pipeline
+├── Start demo.bat            double-click to start the demo on Windows
+├── README.md                 short overview for GitHub
+├── CLAUDE.md                 project rules for AI-assisted editing (kept in step with this file)
 ├── data/                     raw + processed data (git-ignored; re-creatable)
 ├── models/                   the trained model (.joblib, git-ignored) and its compact copy (.npz)
 └── reports/                  metrics.json, external_eval.json, red_team.json, stacking.json,
@@ -994,17 +1157,81 @@ Mini project/
 The flow is strictly one-way, and each step only reads what earlier steps wrote:
 
 ```
-raw files ──prepare_data──> dataset.parquet ──train──> model.joblib + metrics.json
-                                                          │            │
-                         make_figures <───────────────────┼────────────┤
-                         evaluate_external <──────────────┤            │
-                         red_team ──> red_team.json ──────┤ (also read by make_figures)
-                         predict / serve <────────────────┘
+raw files ─prepare_data─> dataset.parquet ─train─> model.joblib ─> model.npz (compact copy)
+                                                         └─> metrics.json
+
+model.joblib + dataset.parquet ─evaluate_external─> external_eval.json
+model.joblib + dataset.parquet ─red_team──────────> red_team.json
+model.npz (or model.joblib)    ─predict, serve────> verdicts
+the JSON reports               ─make_figures──────> figures/*.png
+the JSON reports               ─serve─────────────> every number on the page
 ```
 
 Two rules keep this honest: raw files are never edited (cleaning lives in code, so it can be
 re-run and reviewed), and the charts are drawn from the JSON reports, never by re-running the
 model, so every chart matches the numbers in this document.
+
+### 13.1 Diagrams for a project report
+
+**Data-flow diagram, level 0 (context).** The whole system as one process:
+
+```
+                      URL / message / QR image
+   ┌────────┐  ───────────────────────────────────>  ┌──────────────────────┐
+   │  User  │                                        │  Malicious URL       │
+   │        │  <───────────────────────────────────  │  detection system    │
+   └────────┘  verdict, score, explanation,          └──────────────────────┘
+               attack path, lookalike warning                  ^
+                                                               │ labelled URLs (offline, once)
+                                                    ┌──────────┴───────────┐
+                                                    │ Public URL datasets  │
+                                                    └──────────────────────┘
+```
+
+**Data-flow diagram, level 1.** Offline (training) above the line, online (scoring) below:
+
+```
+ Public datasets ─> [1 Download] ─> raw files ─> [2 Prepare: normalise, clean, dedupe,
+                                                    hash site to bucket, 53 features]
+                                                              │ dataset.parquet
+                                                              v
+                     [3 Train: learned features (out-of-fold), forest search,
+                        booster rounds, thresholds on validation, test once]
+                                       │ model bundle            │ metrics.json
+                                       v                         v
+                     [4 Evaluate externally]  [5 Red team + defence + lookalike]  [6 Charts]
+ ─────────────────────────────────────────────────────────────────────────────────────────
+ User ─URL─> [7 Normalise + 56 features] ─> [8 Forest + booster, average] ─> [9 Threshold]
+                                                      │                           │
+                                     [10 Explain: contributions, tree votes]      │
+                                                      │                           │
+ User <──────────── verdict + explanation + [11 Lookalike rules] <────────────────┘
+ User ─message─> [12 Triage: find, refang, dedupe links] ─> steps 7-11 for each link
+ User ─URL─> [13 Attack: beam search, each level scored by step 8] ─> cheapest path
+```
+
+**Sequence of one check on the page** (`POST /api/score`):
+
+```
+Browser            serve.py (Handler)        Explainer / UrlClassifier         lookalike
+   │ type a URL         │                            │                            │
+   │ (160 ms pause)     │                            │                            │
+   │── POST /api/score ─>│ size + JSON + junk checks  │                            │
+   │                    │── explain(url) ───────────>│ normalise, 56 features     │
+   │                    │                            │ walk 200 trees + 600 rounds│
+   │                    │<── score, halves, votes, ──│                            │
+   │                    │    contributions, heat     │                            │
+   │                    │── check(url) ──────────────┼───────────────────────────>│
+   │                    │<── findings ───────────────┼────────────────────────────│
+   │<── JSON (≈ 5–10 ms server time) ─│               │                            │
+   │ draw verdict, two-model panel, vote histogram, contributions, lookalike      │
+```
+
+**Use cases** (actor → what they can do): a *visitor* checks one URL, switches the decision
+mode, reads the explanation, runs the attack against either scorer, pastes a message, scans a
+QR code and downloads the triage CSV; a *developer* runs the pipeline scripts, `predict.py`
+and the tests; a *maintainer* retrains, re-runs the reports and pushes, and the hosted page
+redeploys from GitHub.
 
 ## 14. Step-by-step build
 
@@ -1089,6 +1316,18 @@ learned features must be computed with exactly the weights fitted in training.
 because other programs were using the CPU (the forest's `fit_seconds`, about 27 on a quiet run,
 was 295).
 
+How long each step took on that busy run (timestamps from the log; a quiet run is roughly 2–3×
+faster):
+
+| Step | Started | Took | Log line to look for |
+|---|---|---|---|
+| 1 leakage | 22:48:49 | 4 min | `random F1 0.8438  site-disjoint F1 0.7193` |
+| 2 cross-dataset | 22:52:41 | 13 min | — |
+| 3 learned features | 23:05:34 | 7 min | — |
+| 4 search | 23:12:37 | 14 min | `chosen: {'min_samples_leaf': 3, 'max_samples': 0.2, 'max_depth': 25}` |
+| 5 forest + booster | 23:26:22 | 16 min (booster 11) | `booster: 600 rounds; validation PR-AUC forest 0.9389  booster 0.9437  average 0.9434` |
+| 6 test, baselines, importance | 23:42:36 | 13 min | `test @max-F1 threshold: acc 0.8869  prec 0.8402  rec 0.8202  F1 0.8301  ROC-AUC 0.9465` |
+
 ### Step 5 — Charts (`make_figures.py`, seconds)
 
 ```powershell
@@ -1137,6 +1376,21 @@ Run `make_figures.py` afterwards for the two red-team charts.
 .\.venv\Scripts\python.exe src\predict.py --file urls.txt --mode strict
 .\.venv\Scripts\python.exe src\predict.py --explain "http://194.48.152.10/bins/x86.sh"
 ```
+
+Output of the first form with four URLs (the scores are those of the current model):
+
+```
+mode = balanced (flag as malicious when score >= 0.422)
+
+benign     0.160  github.com/scikit-learn
+MALICIOUS  0.953  http://paypal.com.secure-login-verify.xyz/webscr?cmd=_login
+MALICIOUS  1.000  http://194.48.152.10/bins/x86.sh
+benign     0.400  http://free-gift-card-winner.tk/claim.php
+```
+
+The last one is a made-up prize scam that the two halves disagree on (forest 0.59, booster
+0.21); it falls just under the balanced cut-off, and the demo page lists it as an example for
+that reason.
 
 `UrlClassifier` loads the bundle once; `featurise` = normalise → 53 fixed features + 3 learned
 features; `score` = the mean of the forest's and the booster's probability (`score_parts` returns
@@ -1713,6 +1967,26 @@ model when the fingerprints differ.
 The HTTP tests start the real server on a free port in a background thread. 42 tests in all,
 about a minute (loading the `.joblib` dominates).
 
+Every test by name, for a test-case table in a report (all 42 pass on the current model):
+
+| File | Tests |
+|---|---|
+| `test_compact.py` (7) | `probabilities_match_scikit_learn`, `booster_matches_scikit_learn`, `score_is_the_mean_of_the_two_halves`, `whole_classifier_matches`, `explanations_match`, `compact_file_matches_the_trained_model`, `server_prefers_the_compact_file_only_when_current` |
+| `test_explain.py` (18) | `contributions_add_up_to_the_score`, `one_contribution_per_model_feature`, `tree_votes_average_to_the_forest_half`, `halves_are_each_models_score_and_average_to_the_score`, `character_heat_adds_up_to_the_pattern_score`, `parts_match_the_feature_code`, `verdict_follows_each_threshold`, `result_is_plain_json`, `blank_url_is_rejected`, `text_the_training_data_dropped_as_junk_is_rejected`, `every_current_feature_is_described`, `unknown_feature_still_gets_a_readable_label`, `unknown_threshold_becomes_a_mode`, `page_and_scripts_are_served_with_the_right_types`, `folders_are_not_listed_and_files_outside_web_are_unreachable`, `state_describes_the_saved_model`, `score_answers_a_url`, `score_rejects_anything_but_a_url_string` |
+| `test_red_team.py` (17) | `each_impersonation_trick_is_named`, `real_sites_and_ordinary_words_are_left_alone`, `alignment_spells_both_names`, `punycode_is_shown_as_the_browser_would`, `every_candidate_is_a_valid_one_move_edit`, `attack_path_is_scored_by_the_real_model`, `a_url_that_already_passes_is_not_attacked`, `hardened_score_is_the_highest_view`, `plain_level_is_the_model_itself`, `links_are_found_refanged_and_counted`, `link_text_naming_another_site_is_reported`, `file_names_and_trailing_punctuation`, `score_carries_the_lookalike_check`, `attack_endpoint`, `attack_rejects_bad_input`, `triage_endpoint`, `triage_needs_links` |
+
+(Each name is prefixed with `test_` in the code.) A sample test case written out in the usual
+report format:
+
+| ID | Input | Expected | Actual |
+|---|---|---|---|
+| TC-1 | `POST /api/score` with `{"url": "http://194.48.152.10/bins/x86.sh"}` | 200, verdict malicious in every mode | score 1.000, malicious |
+| TC-2 | `POST /api/score` with `{"url": null}` | 400 with a JSON error | 400 |
+| TC-3 | `GET /../src/serve.py` | 404, file not served | 404 |
+| TC-4 | `paypa1.com` through the lookalike check | technique "look-alike characters", brand PayPal | as expected |
+| TC-5 | contributions of any URL | baseline + Σ contributions = score (≤ 10⁻⁵) | holds for all 6 test URLs |
+| TC-6 | compact model vs scikit-learn on 725 URLs | difference ≤ 10⁻¹² | holds for both halves |
+
 Manual checks done on 2026-11-24 in a browser (Chrome via agent-browser): every example
 button, typing, Enter, clearing the box, both mode switches, the measure selector, all "show
 all" toggles and "Check this URL" buttons; no console errors or CSP violations; no horizontal
@@ -1728,6 +2002,13 @@ code generated for `http://free-gift-card-winner.tk/claim.php`, uploaded through
 a photo*, decoded, filled in and scored malicious by the forest-only model of that day; the lookalike alignment for
 `paypa1-support.com`; no horizontal scrolling at 390 px.
 
+After the booster was added (2026-11-25), checked again in Chrome (agent-browser) at desktop
+width and 390 px: the *Two models, one score* panel (both halves, the cut-off and the average),
+the forest's vote histogram under it, the header ("200-tree forest + 600-round booster, 56
+features"), the contributions, no horizontal scrolling. The demo walkthrough of section 22
+was re-run: *Lookalike sign-in* is beaten by 2 free edits against the model as trained and
+needs 3 new-domain edits (price 6) against the hardened scorer; `paypa1.com` scores 0.178.
+
 **Memory measurement** (section 19.1). The server was started as a separate process, every
 endpoint was exercised (`/api/state`, a score, a hardened attack, a 120-link message), and the
 process's resident memory and peak working set were read with `psutil` (installed in the venv
@@ -1737,17 +2018,23 @@ Windows the venv's `python.exe` is a small launcher that starts the real interpr
 child's. Re-measured on 2026-11-25 with the booster added: peak 304 MB. The compact model was also checked to run with pandas made unimportable
 (`sys.modules["pandas"] = None`), as it is in the container.
 
-**Live deployment checks** on https://malicious-url-detector-33wl.onrender.com (24 November 2026, measured from this laptop; server-side
-times are the `milliseconds` field each endpoint returns, so they exclude the network):
+**Live deployment checks** on https://malicious-url-detector-33wl.onrender.com, re-run on 25
+November 2026 after the redeploy with the forest + booster model (measured from this laptop;
+server-side times are the `milliseconds` field each endpoint returns, so they exclude the
+network):
 
 | Check | Result |
 |---|---|
-| page (`/`) | HTTP 200 in 0.39 s |
-| `/api/state` | 200 trees, 56 features, model file `malicious_url_rf.npz` |
-| `/api/score` with `paypa1.com/signin` | score 0.68; lookalike technique `swap`; 7.4 ms |
-| `/api/attack`, hardened scorer, `free-gift-card-winner.tk/claim.php` | path found in 1 edit; 106.6 ms |
-| `/api/triage` with a defanged link | `hxxp://194.48.152[.]10/bins/x.sh` read as `194.48.152.10/bins/x.sh` |
+| page (`/`) | HTTP 200 in 0.60 s |
+| `/api/state` | 200 trees, **600 boosting rounds**, 56 features, model file `malicious_url_rf.npz`; thresholds 0.422 / 0.807 / 0.5 |
+| `/api/score` with `paypa1.com/signin` | score 0.664 (forest 0.680, booster 0.648); 200 tree votes; lookalike technique `swap`; 7.5 ms (the very first score request took 397 ms) |
+| `/api/attack`, model as trained, the *Lookalike sign-in* URL | 0.953 → 0.257 in 2 edits of total price 2; 583 ms |
+| `/api/attack`, hardened scorer, same URL | path found in 3 edits, price 6; 2.4 s (the free plan's 0.1 CPU) |
+| `/api/triage` with a defanged link | `hxxp://194.48.152[.]10/bins/x.sh` read as `194.48.152.10/bins/x.sh`, score 1.000; 4.8 ms |
 | `/vendor/jsQR.js` | HTTP 200 (QR decoding works offline in the visitor's browser) |
+
+The first checks, on 24 November with the forest-only model, gave the same picture (score of
+`paypa1.com/signin` 0.68 in 7.4 ms; page in 0.39 s).
 
 ## 19. Deployment
 
@@ -1788,7 +2075,7 @@ CMD ["python", "src/serve.py", "--no-open"]
 
 The requirements file is copied and installed *before* the code, so Docker can reuse the
 cached package layer when only code changes. `.dockerignore` keeps the 358 MB `data/` folder
-and the venv out of the build. The 88 MB `.joblib` pickle is not shipped: the container serves
+and the venv out of the build. The 90 MB `.joblib` pickle is not shipped: the container serves
 the `.npz`, which loads without pickle and so cannot run code. With Docker installed:
 `docker build -t url-detector .` then `docker run -p 7860:7860 url-detector` and open
 http://localhost:7860. The platform's `PORT` variable overrides the 7860 default.
@@ -1827,7 +2114,12 @@ service got a suffix. Requests to the unsuffixed name answered `404` with the re
 service that is still starting); the real address is the one shown at the top of the
 service's page in the dashboard.
 
-With `autoDeploy`, every `git push` to `main` rebuilds and redeploys. A free service sleeps
+With `autoDeploy`, every `git push` to `main` should rebuild and redeploy. In practice the
+page twice kept showing the old version well after a push (the training-date change, then the
+booster), so after pushing, open the service in the Render dashboard and check the latest deploy names the commit
+just pushed; if not, use **Manual Deploy → Deploy latest commit**, and check **Settings → Build
+& Deploy → Auto-Deploy** is set to *On Commit*. The quickest check from outside is
+`/api/state`: its `model` block shows the trees, the boosting rounds and `trained_at`. A free service sleeps
 after 15 minutes without visitors; the next visit wakes it in about a minute, so open the page
 shortly before a demonstration. The 0.1 CPU share makes a live attack take a second or two.
 
@@ -1848,7 +2140,7 @@ script refuses to publish.
 
 The repository lives **inside the project folder** (`git init` there; on this machine a
 repository rooted at the home folder also exists, and committing into that one would have
-swept in the whole user profile). `.gitignore` excludes the venv, the datasets and the 88 MB
+swept in the whole user profile). `.gitignore` excludes the venv, the datasets and the 90 MB
 `.joblib`, but keeps `data/processed/prepare_report.json` (2 KB, read by the page) and the
 compact model (41 MB, needed by Render). Create an **empty** repository on github.com (no
 README, `.gitignore` or licence, so the first push has nothing to merge), then:
@@ -1859,8 +2151,8 @@ git push -u origin main
 ```
 
 Git Credential Manager opens the browser to sign in to GitHub on the first push. This
-project's repository is **https://github.com/MehrabSD/Url-Detection-using-Random-Forest** (public); it holds about 37 MB, most of it the compact
-model. After the push, the raw files were fetched from outside to confirm that `render.yaml`
+project's repository is **https://github.com/MehrabSD/Url-Detection-using-Random-Forest** (public); its history holds about 73 MB (`git count-objects`), most of it the two versions of
+the compact model (forest only, then forest + booster). After the push, the raw files were fetched from outside to confirm that `render.yaml`
 and the `.npz` are real files (not Git LFS pointers), which Render needs to build.
 
 ---
@@ -2168,6 +2460,37 @@ message checker. Showing a weakness, its cause and its fix lands far better than
     into a validation set and its numbers would no longer be an honest estimate. The average also
     keeps the forest's tree vote and exact explanation on the page.
 
+**About the gradient-boosted half**
+
+39. *How does gradient boosting work, in one minute?* — Start from a constant prediction (the
+    training log-odds of "malicious"). Each round fits a small regression tree to the gradient
+    of the log-loss — for each row, how far the current prediction is from its label — and adds
+    that tree's output, shrunk by the learning rate (0.1), to the running total. After 600
+    rounds the total is the log-odds; the sigmoid turns it into a probability.
+40. *Why `HistGradientBoostingClassifier` and not XGBoost or LightGBM?* — It is the same
+    histogram algorithm as LightGBM, ships with scikit-learn (no extra dependency, same pinned
+    version as the forest), handles missing values natively, and was fast enough: 600 rounds on
+    1.1 M rows in minutes.
+41. *How did you choose 600 rounds, and why no early stopping?* — Every 25 rounds the
+    validation PR-AUC of the **average** was measured (the model actually used); the best was at
+    600, and the curve is flat from about 550 (0.9430 at 500, 0.9434 at 600). Early stopping
+    would carve its own validation set out of the training rows at random, ignoring sites — a
+    leak — so rounds were chosen on the site-disjoint validation bucket instead, then the
+    booster was refitted with exactly that number (deterministic; asserted identical).
+42. *Why average probabilities and not log-odds, and why equal weights?* — Probabilities are
+    on the same 0–1 scale for both models and the forest has no log-odds of its own (its leaf
+    shares can be exactly 0 or 1). Equal weights were fixed in advance; a tuned weight would be
+    one more thing fitted to validation, and the test set can no longer choose it.
+43. *How do you explain a boosted model exactly?* — Each boosting tree's internal nodes get the
+    count-weighted mean of their children's values, so walking from root to leaf credits every
+    change to the split feature and the moves add up to the leaf (Saabas, per round). Summed
+    over 600 rounds that splits the booster's log-odds by feature; one factor per URL converts
+    the log-odds changes to probability changes that add up to the booster's probability, and
+    the page averages them with the forest's.
+44. *What does the booster cost in serving?* — 600 trees of at most 63 leaves are small: the
+    compact file grew from 40.1 to 41.0 MB, peak memory is 304 MB, and one URL still scores in
+    a few milliseconds on the server.
+
 **System design follow-up** — *"Design a link scanner for an email service."* Pipeline:
 extract URLs → normalise → allow-list / cache lookup → blocklist → this lexical model (fast,
 every link) → for the uncertain band, a slower check (sandboxed fetch, page content,
@@ -2197,6 +2520,43 @@ Discuss latency budget, false-positive cost, drift monitoring and adversaries ad
 - Edit distance (Levenshtein, Damerau / optimal string alignment) by dynamic programming;
   Unicode normalisation (NFKC), punycode / IDNA, homograph attacks.
 - Python: the GIL, processes vs threads, pickling, virtual environments.
+
+## 25. Key numbers on one page
+
+Every figure below is from the reports; the section gives the context.
+
+| What | Number | Section |
+|---|---|---|
+| URLs after cleaning / distinct sites | 1,654,727 / 698,917 | 4 |
+| Rows removed: junk / conflicting labels / duplicates | 627 / 26,730 / 104,897 | 4 |
+| Corpus malicious share | 35.5 % | 3 |
+| Train / validation / test URLs | 1,126,862 / 155,612 / 372,253 | 6 |
+| Train / validation / test sites | 489,138 / 69,783 / 139,996 | 6 |
+| Features | 56 = 53 fixed + 3 learned | 7 |
+| Forest | 200 trees, depth ≤ 25, leaf ≥ 3, 20 % row sample, ~24,900 nodes per tree | 8.1 |
+| Booster | 600 rounds, ≤ 63 leaves, learning rate 0.1, leaf ≥ 50, L2 1.0 | 8.3 |
+| Thresholds: balanced / strict / default | 0.422 / 0.807 / 0.5 | 8.4 |
+| Validation PR-AUC: forest / booster / average | 0.9389 / 0.9437 / 0.9434 | 8.3 |
+| **Test accuracy / precision / recall / F1** | **0.887 / 0.840 / 0.820 / 0.830** | 9 |
+| **Test ROC-AUC / PR-AUC** | **0.946 / 0.924** | 9 |
+| Test false-alarm rate (balanced / strict) | 7.9 % / 1.2 % | 9 |
+| Strict-mode recall: forest alone → average | 63.0 % → 66.3 % | 9 |
+| Forest alone on test: F1 / ROC-AUC | 0.825 / 0.941 (at 0.5) | 9.1 |
+| Logistic regression / single tree F1 | 0.802 / 0.770 | 9.1 |
+| Learned features add | 3.6 F1 points | 9.1 |
+| Leakage: random vs site-disjoint F1 (Kaggle) | 0.844 vs 0.719; 80.3 % of random-split test URLs share a site with training | 5.1 |
+| Scheme rule accuracy on raw Kaggle | 83.7 % | 3 |
+| External (unseen sites): URLs / F1 / ROC-AUC / false alarms | 5,839 / 0.824 / 0.942 / 13.9 % | 9.4 |
+| Red team: caught before attack | 356 of 400 | 9.5 |
+| **One free edit evades: plain / hardened** | **83.1 % / 12.7 %** | 9.5–9.6 |
+| Average price of a successful attack: plain / hardened | 1.21 / 2.95 | 9.6 |
+| Hardened scorer cost: validation F1 / external false alarms | 0.866 → 0.842 / 13.9 % → 13.1 % | 9.6 |
+| Lookalike check: brands / external benign flagged | 46 / 0.03 % | 9.7 |
+| Top feature (permutation PR-AUC drop) | `url_ngram_score`, 0.316 | 9.3 |
+| Speed | ~0.55 ms per URL in batches; ~5–10 ms per request on the server | 1, 18 |
+| Model file / compact file | 90.4 MB / 41.0 MB | 15.15 |
+| Server peak memory: scikit-learn objects / compact | ~940 MB / 304 MB | 19.1 |
+| Tests | 42 (7 + 18 + 17) | 18 |
 
 ---
 
@@ -2270,6 +2630,10 @@ value after `=`), `has_fragment`.
 | Server prints "…npz is older than …joblib; serving the full model" | run `python src/compact_forest.py`; until then it uses more memory |
 | Render: "Out of memory (used over 512Mi)" | the container is loading the `.joblib`: check the Dockerfile copies the `.npz` and that `requirements-serve.txt` has no pandas |
 | Render page takes about a minute to open | the free service was asleep after 15 idle minutes; it stays awake while in use |
+| The live page still shows the old model after a push (no *Two models* panel, header without "boosting rounds", the training date still there) | Render did not redeploy: in the dashboard use **Manual Deploy → Deploy latest commit** and set Auto-Deploy to *On Commit* (section 19.3); `/api/state` → `model.boosting_rounds` tells which model is live |
+| The page shows the vote histogram but no *Two models, one score* panel | the model file predates the booster (a `.npz` or `.joblib` without one is still served, as the forest alone); retrain with the current `train.py` |
+| `train.py` seems stuck in step 1 with one CPU core busy | an old copy of `train.py` with `np.isin` on string arrays (quadratic); the current version uses a set lookup |
+| `train.py` much slower than "about 25 minutes" | other programs are using the CPU; the forest and booster use all cores but two (`N_JOBS`), so the run slows down roughly in proportion |
 | Render asks for a "Blueprint path" | enter `render.yaml` |
 | The `.onrender.com` address answers `404 Not Found` with header `x-render-routing: no-server` | no service has that hostname: the name was taken and Render added a suffix (use the address on the service's page), or the first deploy has not finished; check the service's status and *Logs* |
 | `git push` rejected (`fetch first`) | the GitHub repository was created with a README or licence; create it empty, or `git pull --rebase origin main` first |
@@ -2322,6 +2686,11 @@ value after `=`), `has_fragment`.
 | k-nearest neighbours (KNN) | classifying by the labels of the k most similar training examples |
 | Support vector machine (SVM) | a classifier that finds the boundary with the widest margin between classes; a kernel (RBF) lets the boundary curve |
 | Quishing | phishing through a QR code |
+| Learning rate (shrinkage) | the factor each boosting tree's output is multiplied by before it is added; smaller needs more rounds but overfits less |
+| Early stopping | ending boosting when a held-out score stops improving; not used here, because its held-out rows would be a random, not site-disjoint, sample |
+| Model card | a short standard summary of a model's intended use, data, results and limits (section 8.5) |
+| Data-flow diagram (DFD) | a diagram of processes, data stores and the data moving between them (section 13.1) |
+| Abstract | a one-paragraph summary of the problem, method and results |
 
 ## Appendix D. Tools used during development
 
@@ -2337,6 +2706,215 @@ Render's Blueprint (`render.yaml`); the `huggingface_hub` library remains for PR
 bundles jsQR 1.4.0 (Apache 2.0, licence in `web/vendor/`); the `qrcode` npm package was used
 once, outside the project, to generate a test image.
 
+## Appendix E. Every setting in one place
+
+Copied from the code; change one and the results in this document change with it.
+
+**Data and split** (`prepare_data.py`, `train.py`)
+
+| Setting | Value | Where |
+|---|---|---|
+| Random seed (everything) | 42 | `SEED` |
+| Benign rows sampled from the benchmark | 600,000 | `BENCH_BENIGN_SAMPLE` |
+| Junk rule | shorter than 4 characters, no dot, whitespace or control characters | `prepare_data.py`, `explain.py` |
+| Site bucket | `md5(registered domain) % 10` | `bucket_of` |
+| Test / validation / train buckets | 0–1 / 2 / 3–9 | `TEST_BUCKETS`, `VAL_BUCKETS` |
+| Worker processes | CPU cores − 2 | `N_JOBS` |
+| Feature extraction chunk | 20,000 URLs per process task | `extract_many` |
+
+**Features** (`features.py`, `learned_features.py`)
+
+| Setting | Value |
+|---|---|
+| Common TLDs | com, org, net, edu, gov, mil, int |
+| Suspicious TLD list / shorteners / bait words / brands | 54 / 31 / 40 / 40 entries |
+| Host n-grams / URL n-grams | characters, 2–4 / 3–5 |
+| Hashing | 2²⁰ columns, no alternating sign |
+| Naive-Bayes smoothing α | 0.1 |
+| TLD-rate smoothing | 20 pseudo-sites at the overall site rate |
+| Out-of-fold folds | the 7 training buckets |
+
+**Model** (`train.py`)
+
+| Setting | Value |
+|---|---|
+| Diagnostic forest (steps 1–2) | 100 trees, leaf ≥ 2, 50 % row sample |
+| Leakage experiment random split | 80/20, stratified |
+| Search | 9 configurations × 60 trees; tolerance 0.002 PR-AUC, then smallest forest |
+| Final forest | `n_estimators=200, max_depth=25, min_samples_leaf=3, max_samples=0.2, max_features="sqrt", criterion="gini"` |
+| Booster | `learning_rate=0.1, max_iter=600, max_leaf_nodes=63, min_samples_leaf=50, l2_regularization=1.0, early_stopping=False, random_state=42`; rounds checked every 25 |
+| Blend | mean of the two probabilities, equal weights |
+| Thresholds | best F1 on validation; ≤ 1 % validation false alarms; 0.5 |
+| Baselines | logistic regression (standardised, `max_iter=300`); a single tree with the forest's leaf size |
+| Permutation importance | 20,000 test URLs, 3 repeats, PR-AUC drop of the average |
+| Saved bundle | `joblib.dump(..., compress=3)` |
+
+**Red team and defence** (`adversary.py`, `hardening.py`, `red_team.py`)
+
+| Setting | Value |
+|---|---|
+| Edits / prices | 15 edits; price 1 free, 2 new domain, 3 weaker bait |
+| Beam width / depth | 6 / 5 edits; at most 2 children per edit type |
+| Budget | price 6 (curves at 1–6) |
+| Attack sample | 400 phishing URLs from external unseen sites, seed 42, balanced cut-off |
+| Padding texts | `utm_source=newsletter&utm_medium=email&utm_campaign=autumn`; folders `/en-us/help`, `/blog/2024`; bland names `northfield.com`, `bluepeak.net`, `riverstone.org` |
+| Long token (shortened) | 16+ letters, digits, `_` or `-` |
+| Multi-view | full URL; without query/fragment; host + each of the 4 longest folders |
+
+**Lookalike check** (`lookalike.py`)
+
+| Setting | Value |
+|---|---|
+| Brands | 46, each with its official domains |
+| Typo check | brands of 6+ letters not in the ordinary-word list; distance 1, or 2 for 9+ letters |
+| Digit swaps | `0→o 1→l 3→e 4→a 5→s 7→t 8→b 9→g @→a $→s` |
+| Pair swaps | `rn→m vv→w cl→d nn→m` |
+
+**Server and page** (`serve.py`, `triage.py`, `web/`)
+
+| Setting | Value |
+|---|---|
+| Address / port | `127.0.0.1:8000` locally; `0.0.0.0` and `PORT` (7860 in the image, 10000 on Render) in the container |
+| Body limit | 16,384 bytes (`/api/score`, `/api/attack`); 256,000 bytes (`/api/triage`) |
+| URL length | 2,000 characters |
+| Message | 200,000 characters read, at most 300 links |
+| Idle connection timeout | 30 s |
+| Typing pause before scoring | 160 ms |
+| Page polls `/api/version` | every 4 s |
+| QR images | scaled to at most 1,400 px before decoding |
+| Content-Security-Policy | `default-src 'self'; img-src 'self' data:; object-src 'none'; …` |
+
+## Appendix F. What each report file contains
+
+| File | Written by | Top-level keys |
+|---|---|---|
+| `data/processed/prepare_report.json` | `prepare_data.py` | `steps` (rows dropped at each cleaning step), `raw_rows_by_source`, `kaggle_raw_scheme_rule_accuracy`, `kaggle_raw_scheme_share`, `final_rows`, `final_by_source_label`, `final_by_subtype`, `unique_domains`, `n_features`, `seconds` |
+| `reports/metrics.json` | `train.py` | `config` (seed, scikit-learn version, buckets, settings), `split` (rows, sites, malicious share per part), `leakage`, `cross_dataset`, `search` (every candidate, the chosen one), `booster` (params, rounds, the 24-point validation curve, validation PR-AUC of each half and the average), `trees_curve`, `thresholds`, `validation` and `test` (per mode: n, threshold, accuracy, precision, recall, F1, false-positive rate, ROC-AUC, PR-AUC, tn/fp/fn/tp), `test.curves` (ROC and PR points), `test.by_source`, `test.detection_rate_by_kind`, `test.confident_errors`, `comparison` (the seven models), `feature_importance` (all 56), `model` (sizes, timing), `total_minutes` |
+| `reports/external_eval.json` | `evaluate_external.py` | `dataset`, `cleaning`, `overlap_with_training_corpus`, `ms_per_url`, `thresholds`, `results` (`unseen_sites`, `seen_sites`, `all`, each per mode), `halves_unseen_sites` (each half's PR-AUC and ROC-AUC), `confident_errors_unseen_sites`, `evaluated_at`, `seconds` |
+| `reports/red_team.json` | `red_team.py` | `config` (seed, sample, budget, beam, depth, the edit menu and prices), `defences` (for `plain`, `no_query`, `multi_view`: description, views per URL, thresholds, validation and external results, and `attack`: cut-off, caught before attack, evaded and attacker success within each price, never evaded, mean price, edits in cheapest paths, mean single-edit change, examples), `external`, `lookalike` (rates on external and validation, with examples), `evaluated_at`, `minutes` |
+| `reports/stacking.json` | `stacking_experiment.py` | `config` (seed, forest and booster settings, row counts, out-of-fold forest PR-AUC), `models` (`rf`, `hgb`, `average`, `stack`: rounds, cut-offs, validation-B and external results), `minutes`, `evaluated_at` |
+| `reports/ensemble.json` | `ensemble_experiment.py` | `config` (seed, row counts, `members` with chosen settings), `models` (each member and combination: validation-B and external results, blend weights), `minutes`, `evaluated_at` |
+
+The page reads the first four through `/api/state`; `make_figures.py` reads `metrics.json`,
+`prepare_report.json` and `red_team.json`.
+
+## Appendix G. Code reference
+
+Every source file, its size and its main functions, to answer "show me where that happens".
+
+**Pipeline** (`src/`)
+
+| File (lines) | Main functions and classes |
+|---|---|
+| `download_data.py` (90) | `download` streams one file to `.part` and renames it when complete; `main` fetches the four datasets and unpacks the UCI zip |
+| `features.py` (298) | `normalize_url`; `split_url`; `registered_domain` (public-suffix list, offline); `extract_features` (53 floats); `extract_many` (process pool); `registered_domains` |
+| `prepare_data.py` (150) | `load_kaggle`, `load_phiusiil` (label flipped), `load_benchmark` (benign sampled); `bucket_of`; `main`: normalise, clean, dedupe, bucket, features, report |
+| `learned_features.py` (141) | `LearnedFeatures.fit_transform_oof` (out-of-fold values for training rows, by subtracting each bucket's counts) and `.transform` (new URLs); `_nb_weights` |
+| `train.py` (434) | `step_leakage`; `step_cross_dataset`; `metrics_at`; `curve_points`; `permutation_ap`; `forest_size`; `main`: search, final forest, booster rounds, thresholds, test, baselines, importance, bundle, compact export |
+| `compact_forest.py` (249) | `CompactForest` (`from_sklearn`, `leaves`, `predict_proba`); `CompactBooster` (`from_sklearn`, `go_left` with missing values, `raw` log-odds, `predict_proba`); `export`; `load`; `file_sha256` |
+| `predict.py` (135) | `UrlClassifier`: `featurise`, `score_parts` (each half), `score_features`, `score` (the mean), `predict`, `n_trees`, `n_rounds`; `main` (command line, `--mode`, `--file`, `--explain`, `--hardened`) |
+| `evaluate_external.py` (156) | `load_external`; `clean` (same rules as prepare_data); `main`: overlap analysis, three groups, each half |
+| `make_figures.py` (315) | one `fig_*` per chart (`fig_dataset`, `fig_leakage`, `fig_cross`, `fig_comparison`, `fig_curves`, `fig_confusion`, `fig_importance`, `fig_trees`, `fig_booster`, `fig_detection`, `fig_red_team`); `hbars` |
+| `stacking_experiment.py` (187) | `best_rounds`, `staged_at`, `summary`; `main` (out-of-fold forest by bucket, four models, halves of validation) |
+| `ensemble_experiment.py` (223) | `knn_scores` (one neighbour search for several k); `in_parallel` (kernel SVM over all cores); `pr_auc`; `main` (members, soft votes, learned blend) |
+
+**Red team and extra layers**
+
+| File (lines) | Main functions and classes |
+|---|---|
+| `adversary.py` (292) | `MOVES`, `PRICES`; `candidates` (every one-edit variant); `attack` (beam search); `catalogue` (menu for the page) |
+| `hardening.py` (106) | `views`; `HardenedScorer.score` (max over views) and `.score_views`; `load_thresholds` |
+| `red_team.py` (235) | `choose_thresholds` (same rules as train.py); `external_unseen`; `lookalike_flags`; `main` (three stages) |
+| `lookalike.py` (349) | `BRANDS`, `TECHNIQUES`; `skeleton` (confusables); `edit_ops` (optimal string alignment with back-trace); `distance`; `check` |
+| `triage.py` (167) | `refang`; `extract` (anchors, scheme URLs, bare addresses, hidden targets); `triage` (score in one batch, attach lookalike, sort) |
+
+**Demo**
+
+| File (lines) | Role |
+|---|---|
+| `serve.py` (339) | `serving_path` (compact file if its fingerprint matches); `Model` (reload on change); `state`; `Handler.do_GET` / `.do_POST` (the API and static files, security headers, limits) |
+| `explain.py` (241) | `url_parts`; `character_heat`; `Explainer.explain` (score, halves, tree votes, exact contributions, verdicts) |
+| `describe.py` (189) | `GROUPS`, `feature` (labels), `modes`, `EXAMPLES`, `EXAMPLE_MESSAGE` |
+| `web/app.js` (566) | page state, scoring as you type, verdict, two-model panel, contributions, reports |
+| `web/charts.js` (180) | `barTable`, `splitTable`, `halvesChart`, `voteChart`, `tradeoffChart`, `lineChart` (evasion curves) |
+| `web/lab.js` (280) | the live attack and the robustness report |
+| `web/inbox.js` (126) | message triage table and CSV |
+| `web/qr.js` (132) | photo, paste, drop and camera QR reading (loads jsQR on first use) |
+| `web/util.js` (72) | the `el()` and `svg()` DOM helpers, number formatting (`fmt`), `getJSON` |
+
+**Tests**: `tests/test_compact.py` (108 lines), `tests/test_explain.py` (194),
+`tests/test_red_team.py` (208) — section 18.
+
+## Appendix H. All 56 features ranked
+
+Permutation importance of the final model (fall in test PR-AUC when the feature is shuffled,
+mean ± standard deviation over 3 repeats on 20,000 test URLs) and the forest's impurity share.
+Section 9.3 explains how to read them; Appendix A defines each feature.
+
+| Rank | Feature | Permutation | ± | Impurity |
+|---|---|---|---|---|
+| 1 | `url_ngram_score` | 0.3164 | 0.0041 | 0.342 |
+| 2 | `tld_malicious_rate` | 0.0207 | 0.0006 | 0.071 |
+| 3 | `host_ngram_score` | 0.0144 | 0.0007 | 0.102 |
+| 4 | `path_depth` | 0.0116 | 0.0004 | 0.012 |
+| 5 | `url_length` | 0.0046 | 0.0003 | 0.022 |
+| 6 | `host_length` | 0.0029 | 0.0005 | 0.028 |
+| 7 | `n_letters` | 0.0028 | 0.0002 | 0.019 |
+| 8 | `domain_length` | 0.0027 | 0.0002 | 0.015 |
+| 9 | `path_n_digits` | 0.0025 | 0.0002 | 0.006 |
+| 10 | `longest_digit_run` | 0.0024 | 0.0002 | 0.009 |
+| 11 | `n_dots` | 0.0022 | 0.0001 | 0.026 |
+| 12 | `n_hyphens` | 0.0022 | 0.0001 | 0.012 |
+| 13 | `host_longest_label` | 0.0018 | 0.0002 | 0.015 |
+| 14 | `path_longest_segment` | 0.0018 | 0.0001 | 0.022 |
+| 15 | `domain_vowel_ratio` | 0.0017 | 0.0001 | 0.015 |
+| 16 | `ext_html` | 0.0017 | 0.0001 | 0.004 |
+| 17 | `n_slashes` | 0.0016 | 0.0001 | 0.011 |
+| 18 | `n_special` | 0.0016 | 0.0002 | 0.017 |
+| 19 | `uppercase_ratio` | 0.0016 | 0.0002 | 0.007 |
+| 20 | `query_longest_value` | 0.0015 | 0.0001 | 0.005 |
+| 21 | `n_suspicious_words` | 0.0013 | 0.0001 | 0.015 |
+| 22 | `ext_exec` | 0.0011 | 0.0001 | 0.002 |
+| 23 | `tld_is_common` | 0.0011 | 0.0000 | 0.015 |
+| 24 | `n_subdomains` | 0.0010 | 0.0002 | 0.007 |
+| 25 | `url_entropy` | 0.0010 | 0.0001 | 0.020 |
+| 26 | `host_n_digits` | 0.0010 | 0.0001 | 0.019 |
+| 27 | `host_entropy` | 0.0009 | 0.0001 | 0.025 |
+| 28 | `path_length` | 0.0009 | 0.0003 | 0.017 |
+| 29 | `host_n_hyphens` | 0.0009 | 0.0001 | 0.007 |
+| 30 | `query_length` | 0.0008 | 0.0001 | 0.005 |
+| 31 | `digit_ratio` | 0.0007 | 0.0001 | 0.011 |
+| 32 | `brand_outside_domain` | 0.0007 | 0.0000 | 0.004 |
+| 33 | `n_underscores` | 0.0007 | 0.0002 | 0.003 |
+| 34 | `ext_archive` | 0.0006 | 0.0000 | 0.001 |
+| 35 | `n_digits` | 0.0005 | 0.0001 | 0.010 |
+| 36 | `ext_script` | 0.0005 | 0.0001 | 0.012 |
+| 37 | `domain_digit_ratio` | 0.0005 | 0.0001 | 0.006 |
+| 38 | `tld_length` | 0.0005 | 0.0001 | 0.010 |
+| 39 | `tld_is_suspicious` | 0.0004 | 0.0001 | 0.006 |
+| 40 | `n_equals` | 0.0004 | 0.0001 | 0.006 |
+| 41 | `has_embedded_url` | 0.0002 | 0.0000 | 0.000 |
+| 42 | `n_query_params` | 0.0002 | 0.0001 | 0.004 |
+| 43 | `n_hex_escapes` | 0.0002 | 0.0000 | 0.001 |
+| 44 | `n_question` | 0.0001 | 0.0000 | 0.002 |
+| 45 | `n_at` | 0.0001 | 0.0000 | 0.000 |
+| 46 | `n_percent` | 0.0001 | 0.0000 | 0.001 |
+| 47 | `n_ampersand` | 0.0001 | 0.0000 | 0.003 |
+| 48 | `path_has_double_slash` | 0.0001 | 0.0000 | 0.000 |
+| 49 | `host_is_ip` | 0.0001 | 0.0000 | 0.003 |
+| 50 | `has_port` | 0.0000 | 0.0000 | 0.000 |
+| 51 | `has_punycode` | 0.0000 | 0.0000 | 0.000 |
+| 52 | `is_shortener` | 0.0000 | 0.0000 | 0.000 |
+| 53 | `tld_is_country` | 0.0000 | 0.0002 | 0.004 |
+| 54 | `has_fragment` | 0.0000 | 0.0000 | 0.000 |
+| 55 | `has_userinfo` | 0.0000 | 0.0000 | 0.000 |
+| 56 | `special_ratio` | −0.0001 | 0.0001 | 0.020 |
+
+Near-zero values do not make a feature useless: `host_is_ip` scores 0.0001 because raw-IP URLs
+are also caught by the n-gram and length features, so shuffling it alone changes little;
+`has_userinfo` is exactly 0 in both columns: no tree in the forest ever split on it. A negative value
+means shuffling made no difference beyond noise.
+
 ## Change log
 
 | Date | Change |
@@ -2348,10 +2926,11 @@ once, outside the project, to generate a test image.
 | 2026-11-24 | **Red team and defences.** Added `adversary.py` (beam-search attacker over 15 priced edits), `hardening.py` (multi-view scorer) and `red_team.py` → `reports/red_team.json`: on 400 external phishing URLs from unseen sites, one free edit evades the model as trained 82.1 % of the time and the hardened scorer 11.1 %; hardened cut-offs chosen on validation (balanced 0.534, strict 0.840). Added `lookalike.py` (brand impersonation rules, measured at 0.03 % benign flags externally) and `triage.py` (links in a message: refanging, hidden targets). New sections 9.5–9.7, 15.11–15.14, limitations 10–11, interview questions 27–34 (35 added with free hosting). Demo: lookalike panel, QR reader (jsQR vendored), *Try to sneak it past the model*, *Check a whole message* with CSV, robustness report; new endpoints `/api/attack`, `/api/triage`; `predict.py --hardened`; two new figures. Dockerfile and upload script copy `red_team.json` (38 files). Tests 17 → 34. The trained model, its features, its thresholds and every result in sections 1–9.4 are untouched. |
 | 2026-11-24 | **Free hosting.** Hugging Face now requires PRO for Docker Spaces (upload refused with 402). Added `compact_forest.py`: the forest as flat arrays (`models/malicious_url_rf.npz`, 40 MB, no pickle) with a vectorised traversal; identical to `predict_proba` within 10⁻¹² (7.8 × 10⁻¹⁶ measured on 20,000 URLs). `serve.py` serves it when its SHA-256 matches the `.joblib`; `train.py` writes it after saving; `explain.py` walks it. pandas imported lazily in `learned_features.py` and dropped from `requirements-serve.txt`. Measured server peak 316 MB (was ~940 MB). Added `render.yaml`; the Dockerfile ships the `.npz` instead of the `.joblib`; the upload script checks it is current (39 files, 41 MB). Section 19 rewritten for Render; new section 15.15; `tests/test_compact.py` (tests 34 → 39). Model, thresholds and all results untouched. |
 | 2026-11-24 | Demo live at https://malicious-url-detector-33wl.onrender.com. The page header no longer shows the training date (it still comes back from `/api/state`). |
-| 2026-11-25 | **Adopted the forest + gradient boosting average** (the best result of section 9.8). `train.py` now also fits a `HistGradientBoostingClassifier` (63 leaves, learning rate 0.1), picks its rounds on the validation bucket by the PR-AUC of the average (600; curve flat from about 550), sets the three cut-offs for the average (balanced 0.422, strict 0.807) and scores the test sites once more; the forest is unchanged (same seed and search, identical results). Test: F1 0.824 → 0.830, ROC-AUC 0.941 → 0.946, strict recall 63.0 % → 66.3 %; the booster alone was marginally ahead on test and was not switched to (section 9.1). External unseen sites: F1 0.820 → 0.824, false alarms 14.5 % → 13.9 %. `evaluate_external.py` and `red_team.py` re-run (one-free-edit evasion 82.1 % → 83.1 %, hardened 11.1 % → 12.7 %). `compact_forest.py` stores the booster (`CompactBooster`, exact to 4 × 10⁻¹⁶); `explain.py` explains the average exactly (booster walked in log-odds, rescaled); `UrlClassifier.score_parts`; permutation importance computed for the average; new figure `booster_rounds.png`. The page shows *Two models, one score* and the header counts both. Fixed a slow step in `train.py` (`np.isin` on string arrays is quadratic; now a set lookup, same result). The made-up *Prize scam* example now scores 0.40 (forest 0.59, booster 0.21) and is labelled as a disagreement; two red-team tests attack the lookalike sign-in URL instead. Server peak memory 304 MB. Tests 42. New sections 8.3 (booster) and 8.4 (thresholds, was 8.3), limitation 12, interview question 38. |
-| 2026-11-24 | **KNN + SVM ensemble experiment** (section 9.9, `ensemble_experiment.py` → `reports/ensemble.json`): KNN (100,000-row sample, k = 45), linear SVM (all rows), RBF SVM (20,000-row sample), combined with the forest by soft voting and by a learned blend; same halves-of-validation and external protocol, test buckets not read. Not adopted: every combination below the forest on validation (forest PR-AUC 0.9469, best combination 0.9437), external gains within noise. Interview question 37. A first attempt to add KNN and SVM as test-set baselines in `train.py` was stopped in its first step and reverted, so the test sites were not scored by them. The saved model and all earlier results unchanged. |
-| 2026-11-24 | **Stacking experiment** (section 9.8, `stacking_experiment.py` → `reports/stacking.json`): gradient boosting alone, a forest + booster average and stacking with passthrough (out-of-fold forest score by site bucket), tuned on half the validation sites, reported on the other half and the external dataset; test buckets not read. Stacking not adopted (best validation PR-AUC 0.9525 vs forest 0.9469, but booster alone 0.9523, and worst externally); the average listed as the next improvement. Interview question 36. The saved model and all earlier results unchanged. |
 | 2026-11-24 | Documented the deployment as done: live and repository links at the top and in sections 1, 19.5 and 21; GitHub and Render accounts in section 12.1; train.py writing the compact model (step 4); the compact model in the architecture (17.2); how memory was measured and the Windows launcher pitfall, and the checks run against the live site (18); Render's Blueprint path and the `x-render-routing: no-server` diagnosis of the suffixed address (19.3); three troubleshooting rows; tools used. No code or result changed. |
+| 2026-11-24 | **Stacking experiment** (section 9.8, `stacking_experiment.py` → `reports/stacking.json`): gradient boosting alone, a forest + booster average and stacking with passthrough (out-of-fold forest score by site bucket), tuned on half the validation sites, reported on the other half and the external dataset; test buckets not read. Stacking not adopted (best validation PR-AUC 0.9525 vs forest 0.9469, but booster alone 0.9523, and worst externally); the average listed as the next improvement. Interview question 36. The saved model and all earlier results unchanged. |
+| 2026-11-24 | **KNN + SVM ensemble experiment** (section 9.9, `ensemble_experiment.py` → `reports/ensemble.json`): KNN (100,000-row sample, k = 45), linear SVM (all rows), RBF SVM (20,000-row sample), combined with the forest by soft voting and by a learned blend; same halves-of-validation and external protocol, test buckets not read. Not adopted: every combination below the forest on validation (forest PR-AUC 0.9469, best combination 0.9437), external gains within noise. Interview question 37. A first attempt to add KNN and SVM as test-set baselines in `train.py` was stopped in its first step and reverted, so the test sites were not scored by them. The saved model and all earlier results unchanged. |
+| 2026-11-25 | **Adopted the forest + gradient boosting average** (the best result of section 9.8). `train.py` now also fits a `HistGradientBoostingClassifier` (63 leaves, learning rate 0.1), picks its rounds on the validation bucket by the PR-AUC of the average (600; curve flat from about 550), sets the three cut-offs for the average (balanced 0.422, strict 0.807) and scores the test sites once more; the forest is unchanged (same seed and search, identical results). Test: F1 0.824 → 0.830, ROC-AUC 0.941 → 0.946, strict recall 63.0 % → 66.3 %; the booster alone was marginally ahead on test and was not switched to (section 9.1). External unseen sites: F1 0.820 → 0.824, false alarms 14.5 % → 13.9 %. `evaluate_external.py` and `red_team.py` re-run (one-free-edit evasion 82.1 % → 83.1 %, hardened 11.1 % → 12.7 %). `compact_forest.py` stores the booster (`CompactBooster`, exact to 4 × 10⁻¹⁶); `explain.py` explains the average exactly (booster walked in log-odds, rescaled); `UrlClassifier.score_parts`; permutation importance computed for the average; new figure `booster_rounds.png`. The page shows *Two models, one score* and the header counts both. Fixed a slow step in `train.py` (`np.isin` on string arrays is quadratic; now a set lookup, same result). The made-up *Prize scam* example now scores 0.40 (forest 0.59, booster 0.21) and is labelled as a disagreement; two red-team tests attack the lookalike sign-in URL instead. Server peak memory 304 MB. Tests 42. New sections 8.3 (booster) and 8.4 (thresholds, was 8.3), limitation 12, interview question 38. |
+| 2026-11-25 | **Documentation completed for the project report and viva.** Added an abstract; sections 1.1–1.4 (problem statement, objectives and how each was met, scope, related work); validation results per threshold (8.4) and a model card (8.5); the most confident test mistakes (9.2); a conclusion (11.1, section 11 renamed); data-flow diagrams (levels 0 and 1), a request sequence diagram and use cases (13.1); per-step training times (step 4) and real `predict.py` output (step 7); every test by name and sample test cases (18); live checks re-run against the redeployed site (600 boosting rounds live); the Render auto-deploy lag and how to force a deploy (19.3, Appendix B); interview questions 39–44 on the booster; section 25 (key numbers); Appendices E (every setting), F (report file contents), G (code reference), H (all 56 features ranked); glossary and references. Corrected stale figures: demo server 304 MB (was 320), model 90 MB (was 88), pipeline time, the repository size, the test list in section 13, and the order of this change log. No code or result changed. |
 
 ## References
 
@@ -2362,8 +2941,21 @@ once, outside the project, to generate a test image.
 - Breiman, L. (2001). *Random Forests.* Machine Learning 45.
 - Saabas, A. (2014). *Interpreting random forests* (the `treeinterpreter` method).
 - Public Suffix List: https://publicsuffix.org
-- scikit-learn documentation: `RandomForestClassifier`, `HashingVectorizer`, `permutation_importance`, `precision_recall_curve`.
+- scikit-learn documentation: `RandomForestClassifier`, `HistGradientBoostingClassifier`, `HashingVectorizer`, `precision_recall_curve`, `roc_curve`.
+- Friedman, J. H. (2001). *Greedy function approximation: a gradient boosting machine.* Annals of Statistics 29(5).
+- Ke, G. et al. (2017). *LightGBM: A highly efficient gradient boosting decision tree.* NeurIPS 30.
+- Wolpert, D. H. (1992). *Stacked generalization.* Neural Networks 5(2).
+- Platt, J. (1999). *Probabilistic outputs for support vector machines and comparisons to regularized likelihood methods.* Advances in Large Margin Classifiers.
+- Cover, T. & Hart, P. (1967). *Nearest neighbor pattern classification.* IEEE Transactions on Information Theory 13(1).
+- Cortes, C. & Vapnik, V. (1995). *Support-vector networks.* Machine Learning 20.
+- Ma, J., Saul, L. K., Savage, S. & Voelker, G. M. (2009). *Beyond blacklists: learning to detect malicious web sites from suspicious URLs.* KDD.
+- Garera, S., Provos, N., Chew, M. & Rubin, A. D. (2007). *A framework for detection and measurement of phishing attacks.* ACM WORM.
+- Sahoo, D., Liu, C. & Hoi, S. C. H. (2017). *Malicious URL detection using machine learning: a survey.* arXiv:1701.07179.
+- Le, H., Pham, Q., Sahoo, D. & Hoi, S. C. H. (2018). *URLNet: learning a URL representation with deep learning for malicious URL detection.* arXiv:1802.03162.
+- Kaufman, S., Rosset, S., Perlich, C. & Stitelman, O. (2012). *Leakage in data mining: formulation, detection, and avoidance.* ACM TKDD 6(4).
+- Mitchell, M. et al. (2019). *Model cards for model reporting.* FAT* (the format of section 8.5).
 - Hugging Face Spaces documentation, Docker Spaces: https://huggingface.co/docs/hub/spaces-sdks-docker
+- Render documentation, Blueprints (`render.yaml`): https://render.com/docs/blueprint-spec
 - Biggio, B. & Roli, F. (2018). *Wild patterns: Ten years after the rise of adversarial machine learning.* Pattern Recognition 84.
 - Lowd, D. & Meek, C. (2005). *Good word attacks on statistical spam filters.* CEAS.
 - Damerau, F. J. (1964). *A technique for computer detection and correction of spelling errors.* Communications of the ACM 7(3).
